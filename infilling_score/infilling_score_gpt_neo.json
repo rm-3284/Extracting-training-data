@@ -1,0 +1,7 @@
+{
+  "model": "EleutherAI/gpt-neo-1.3B",
+  "dataset": "MIMIR wikipedia_(en)",
+  "n_samples": 50,
+  "infilling_score_m1_auc": 0.55,
+  "infilling_score_m5_auc": 0.5652
+}
