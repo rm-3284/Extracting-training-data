@@ -1,0 +1,17 @@
+# Optional overrides (merge with defaults.yaml via --experiment)
+
+active_model: pythia_2p8
+
+experiment:
+  output_dir: mia_eval_outputs
+  max_length_tokens: 256
+
+generation:
+  num_samples_per_strategy: 32
+  batch_size: 2
+  seq_len: 256
+
+evaluation:
+  test_fraction: 0.25
+  val_fraction: 0.15
+  random_state: 0

@@ -1,0 +1,106 @@
+# Merge with experiment.yaml or override via CLI --set key=value
+
+experiment:
+  seed: 42
+  output_dir: mia_eval_outputs
+  max_length_tokens: 256
+  device: null  # cuda if available else cpu
+
+# Active preset: gpt_neo_2p7 | pythia_2p8 | redpajama_7b
+active_model: gpt_neo_2p7
+
+models:
+  gpt_neo_2p7:
+    target_model: EleutherAI/gpt-neo-2.7B
+    reference_model: EleutherAI/gpt-neo-125M
+    tokenizer: EleutherAI/gpt-neo-2.7B
+    torch_dtype: float16
+    ground_truth:
+      # Streaming HF dataset used to build membership index (Pile family matches GPT-Neo / Pythia pretraining).
+      dataset_name: EleutherAI/the_pile_deduplicated
+      dataset_config: null
+      text_field: text
+      max_documents: 2000
+      max_shingles: 2000000
+      shingle_chars: 200
+      min_match_chars: 150
+
+  pythia_2p8:
+    target_model: EleutherAI/pythia-2.8b
+    reference_model: EleutherAI/pythia-160m
+    tokenizer: EleutherAI/pythia-2.8b
+    torch_dtype: float16
+    ground_truth:
+      dataset_name: EleutherAI/the_pile_deduplicated
+      dataset_config: null
+      text_field: text
+      max_documents: 2000
+      max_shingles: 2000000
+      shingle_chars: 200
+      min_match_chars: 150
+
+  redpajama_7b:
+    target_model: togethercomputer/RedPajama-INCITE-7B-Base
+    reference_model: togethercomputer/RedPajama-INCITE-Base-3B-v1
+    tokenizer: togethercomputer/RedPajama-INCITE-7B-Base
+    torch_dtype: float16
+    ground_truth:
+      dataset_name: togethercomputer/RedPajama-Data-1T-Sample
+      dataset_config: null
+      text_field: text
+      max_documents: 2000
+      max_shingles: 2000000
+      shingle_chars: 200
+      min_match_chars: 150
+
+generation:
+  # Carlini et al. style (see Extracting-Training-Data-from-Large-Langauge-Models): empty EOS prompt, 256 tokens.
+  num_samples_per_strategy: 64
+  batch_size: 4
+  seq_len: 256
+  top_k: 40
+  top_p: 1.0
+  temperature_decay:
+    enabled: true
+    # First 20 positions: paper mapping (handled in code); then T=1.0
+  nucleus:
+    enabled: false
+    top_p: 0.95
+    temperature: 1.0
+  # Additional guaranteed non-members (no pile overlap expected): short Wikipedia-style snippets
+  add_wikipedia_nonmembers: 32
+  wikipedia_dataset: wikipedia
+  wikipedia_config: "20220301.en"
+  wikipedia_split: train
+  # Raw training excerpts labeled member=1 (not generated)
+  add_training_excerpts_members: 32
+
+methods:
+  infilling:
+    hyperparameter_search:
+      type: grid
+      grid:
+        m: [1, 3, 5]
+        k: [0.05, 0.1, 0.2]
+
+  wbc:
+    hyperparameter_search:
+      type: grid
+      grid:
+        min_window: [2]
+        max_window: [40, 80]
+        num_windows: [10]
+
+  memtrace:
+    max_length: 512
+    hyperparameter_search:
+      type: grid
+      grid:
+        n_estimators: [100, 200]
+        max_depth: [6, 10]
+        min_samples_leaf: [2, 4]
+
+evaluation:
+  test_fraction: 0.2
+  val_fraction: 0.15  # of remaining after test, for hyperparameter selection
+  random_state: 42
