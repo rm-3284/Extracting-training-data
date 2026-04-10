@@ -30,6 +30,8 @@ def load_causal_lm(
     tokenizer_name: Optional[str],
     device: torch.device,
     torch_dtype: Optional[torch.dtype] = None,
+    *,
+    attn_implementation: Optional[str] = None,
 ) -> Tuple[Any, Any]:
     tok_name = tokenizer_name or model_name
     tokenizer = AutoTokenizer.from_pretrained(tok_name, trust_remote_code=True)
@@ -40,8 +42,14 @@ def load_causal_lm(
     kwargs: Dict[str, Any] = {"trust_remote_code": True}
     if torch_dtype is not None:
         kwargs["torch_dtype"] = torch_dtype
+    if attn_implementation:
+        kwargs["attn_implementation"] = attn_implementation
 
-    model = AutoModelForCausalLM.from_pretrained(model_name, **kwargs)
+    try:
+        model = AutoModelForCausalLM.from_pretrained(model_name, **kwargs)
+    except TypeError:
+        kwargs.pop("attn_implementation", None)
+        model = AutoModelForCausalLM.from_pretrained(model_name, **kwargs)
     model.to(device)
     model.eval()
     if hasattr(model.config, "pad_token_id") and model.config.pad_token_id is None:

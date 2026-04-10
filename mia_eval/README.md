@@ -68,7 +68,7 @@ Artifacts go to `mia_eval_outputs/<active_model>/`:
 
 ## Requirements
 
-Large GPUs are recommended for **2.7B–7B** models and especially **memTrace** (`output_attentions=True`). Use smaller `generation.num_samples_per_strategy`, `methods.memtrace.max_length`, and `float16` in config if you hit OOM.
+Large GPUs are recommended for **2.7B–7B** models and especially **memTrace** (`output_attentions=True`). The pipeline loads the target model with **eager attention** for memTrace so SDPA/Flash does not silently break attention features. Use smaller `generation.num_samples_per_strategy`, `methods.memtrace.max_length`, and `float16` in config if you hit OOM.
 
 ## References
 

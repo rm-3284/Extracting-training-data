@@ -60,12 +60,22 @@ def compute_feature_matrix(
     dtype = torch_dtype_from_str(model_bundle.get("torch_dtype"))
     target = model_bundle["target_model"]
     tok_id = model_bundle.get("tokenizer") or target
-    model, tokenizer = load_causal_lm(target, tok_id, device, dtype)
+    # SDPA / flash attention ignores output_attentions; eager returns real weights for memTrace.
+    model, tokenizer = load_causal_lm(
+        target, tok_id, device, dtype, attn_implementation="eager"
+    )
     lm_head = resolve_lm_head(model)
     rows: List[np.ndarray] = []
     for t in tqdm(texts, desc="memTrace features"):
         rows.append(_features_one(model, tokenizer, lm_head, t, device, max_length))
     return np.stack(rows, axis=0)
+
+
+def _sanitize_feature_matrix(X: np.ndarray) -> np.ndarray:
+    """Finite values only; StandardScaler rejects inf/nan."""
+    out = np.asarray(X, dtype=np.float64, copy=True)
+    np.nan_to_num(out, copy=False, nan=0.0, posinf=1e10, neginf=-1e10)
+    return out
 
 
 def fit_rf_on_splits(
@@ -81,6 +91,7 @@ def fit_rf_on_splits(
     from sklearn.metrics import roc_auc_score
     from sklearn.preprocessing import StandardScaler
 
+    X = _sanitize_feature_matrix(X)
     X_tr, y_tr = X[train_mask], labels[train_mask]
     X_va, y_va = X[val_mask], labels[val_mask]
     X_te, y_te = X[test_mask], labels[test_mask]
