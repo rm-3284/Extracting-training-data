@@ -8,7 +8,7 @@ This directory runs a **config-driven** pipeline to compare three membership sig
 |-------------------------|--------|-----------------|----------------------------|
 | `gpt_neo_2p7` | `EleutherAI/gpt-neo-2.7B` | `EleutherAI/gpt-neo-125M` | `EleutherAI/the_pile_deduplicated` (streaming) |
 | `pythia_2p8` | `EleutherAI/pythia-2.8b` | `EleutherAI/pythia-160m` | same |
-| `redpajama_7b` | `togethercomputer/RedPajama-INCITE-7B-Base` | `togethercomputer/RedPajama-INCITE-Base-3B-v1` | `togethercomputer/RedPajama-Data-1T-Sample` |
+| `redpajama_7b` | `togethercomputer/RedPajama-INCITE-7B-Base` | `togethercomputer/RedPajama-INCITE-Base-3B-v1` | `togethercomputer/RedPajama-Data-1T` (streamed; see YAML for subset `dataset_config` if needed) |
 
 Override any field with a second YAML (`--experiment`) or `--set key=value` (see `run_pipeline.py`).
 
