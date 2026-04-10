@@ -45,10 +45,9 @@ models:
     tokenizer: togethercomputer/RedPajama-INCITE-7B-Base
     torch_dtype: float16
     ground_truth:
-      # Full corpus (streamed; capped by max_documents / max_shingles). If load_dataset
-      # requires a subset name on your datasets version, set e.g. dataset_config: c4
+      # Multi-config dataset: ``null`` is invalid. Use e.g. default, c4, wikipedia, github, …
       dataset_name: togethercomputer/RedPajama-Data-1T
-      dataset_config: null
+      dataset_config: default
       text_field: text
       max_documents: 2000
       max_shingles: 2000000

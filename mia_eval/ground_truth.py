@@ -91,6 +91,10 @@ def stream_texts(
 ) -> Iterator[str]:
     from datasets import load_dataset
 
+    # togethercomputer/RedPajama-Data-1T requires a builder config (default, c4, …).
+    if dataset_name == "togethercomputer/RedPajama-Data-1T" and not dataset_config:
+        dataset_config = "default"
+
     try:
         if dataset_config:
             ds = load_dataset(
