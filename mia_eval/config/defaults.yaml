@@ -76,31 +76,38 @@ generation:
   add_training_excerpts_members: 32
 
 methods:
+  # Grids sized for a serious baseline (more compute than a smoke test). Trim lists if runs are too slow.
+
   infilling:
+    # m = lookahead; k = bottom-k fraction (OpenReview infilling MIA).
     hyperparameter_search:
       type: grid
       grid:
-        m: [1, 3, 5]
-        k: [0.05, 0.1, 0.2]
+        m: [1, 3, 5, 7]
+        k: [0.05, 0.1, 0.15, 0.2]
 
   wbc:
+    # Window scales for ~256-token texts; num_windows around the paper’s ~10 ensemble size.
+    # Optional multi-schedule ensemble: set use_ensemble + ensemble_variants (see mia_eval/README).
     hyperparameter_search:
       type: grid
       grid:
         min_window: [2]
-        max_window: [40, 80]
-        num_windows: [10]
+        max_window: [32, 40, 56, 72]
+        num_windows: [8, 10, 12]
 
   memtrace:
-    max_length: 512
+    # Align with experiment.max_length_tokens / generation.seq_len.
+    max_length: 256
     hyperparameter_search:
       type: grid
       grid:
-        n_estimators: [100, 200]
-        max_depth: [6, 10]
+        n_estimators: [150, 250, 350]
+        max_depth: [5, 10, 15]
         min_samples_leaf: [2, 4]
 
 evaluation:
   test_fraction: 0.2
-  val_fraction: 0.15  # of remaining after test, for hyperparameter selection
+  # Share of data after the test holdout used for val (stabler AUC for picking grid points).
+  val_fraction: 0.2
   random_state: 42

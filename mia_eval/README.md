@@ -24,7 +24,7 @@ This is a **practical proxy** for “appears in training”: false positives/neg
 
 ## Hyperparameters
 
-Edit `config/defaults.yaml` under `methods.<name>.hyperparameter_search.grid` (Cartesian product). Examples:
+Edit `config/defaults.yaml` under `methods.<name>.hyperparameter_search.grid` (Cartesian product). Defaults aim at a **reasonable benchmarking budget**: 16 infilling configs, 12 WBC configs, 18 memTrace RF configs (trim lists if too slow). Examples:
 
 - **Infilling**: `m`, `k` (see `infilling_score/` and OpenReview paper linked there).
 - **WBC**: `min_window`, `max_window`, `num_windows`, or add `window_sizes: [[2,3,4,...]]` as a list of lists in YAML.
