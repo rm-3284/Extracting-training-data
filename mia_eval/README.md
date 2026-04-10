@@ -55,7 +55,9 @@ Artifacts go to `mia_eval_outputs/<active_model>/`:
 - `training_shingle_index.json` — saved index
 - `samples.jsonl` — generated + auxiliary texts
 - `samples_labeled.jsonl` — adds `label`
-- `results.json` — best val/test AUC per method
+- `results.json` — best val/test AUC per method, paths to score files, and `score_orientation` notes
+- `evaluation_splits.json` — `train_indices`, `val_indices`, `test_indices` (into the `samples_labeled.jsonl` line order)
+- `scores_per_sample.jsonl` — one row per sample: `i`, `label`, `source`, `split`, `infilling_score`, `wbc_score`, `memtrace_p_member`, plus `infilling_score_raw` / `wbc_score_raw` (model output before sign flip). The non-`raw` infilling/WBC fields are **oriented** so **higher ≈ member** on the **validation** split. Join with texts via line `i` in `samples_labeled.jsonl`.
 
 ## Steps only
 

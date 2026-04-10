@@ -45,6 +45,88 @@ def _auc_direction(y: np.ndarray, s: np.ndarray) -> tuple[float, np.ndarray]:
     return a0, s
 
 
+def _orient_scores_full(
+    y: np.ndarray, mask: np.ndarray, scores_full: np.ndarray
+) -> np.ndarray:
+    """Flip sign on all samples if -score has higher AUC than score on mask (higher = member)."""
+    s = np.asarray(scores_full, dtype=np.float64)
+    ym, sm = y[mask], s[mask]
+    if ym.size == 0 or len(np.unique(ym)) < 2:
+        return s
+    try:
+        a0 = float(roc_auc_score(ym, sm))
+        a1 = float(roc_auc_score(ym, -sm))
+        return -s if a1 > a0 else s
+    except ValueError:
+        return s
+
+
+def _jsonable(obj):
+    if isinstance(obj, dict):
+        return {str(k): _jsonable(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_jsonable(v) for v in obj]
+    if isinstance(obj, tuple):
+        return [_jsonable(v) for v in obj]
+    if isinstance(obj, (np.integer, np.int64, np.int32)):
+        return int(obj)
+    if isinstance(obj, (np.floating, np.float64, np.float32)):
+        return float(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    return obj
+
+
+def _save_evaluation_artifacts(
+    run_dir: Path,
+    *,
+    y: np.ndarray,
+    sources: list,
+    tr_m: np.ndarray,
+    va_m: np.ndarray,
+    te_m: np.ndarray,
+    infilling: np.ndarray,
+    wbc: np.ndarray,
+    memtrace_p: np.ndarray,
+    infilling_raw: np.ndarray | None = None,
+    wbc_raw: np.ndarray | None = None,
+) -> None:
+    splits = {
+        "train_indices": np.nonzero(tr_m)[0].astype(int).tolist(),
+        "val_indices": np.nonzero(va_m)[0].astype(int).tolist(),
+        "test_indices": np.nonzero(te_m)[0].astype(int).tolist(),
+        "n_samples": int(len(y)),
+    }
+    with open(run_dir / "evaluation_splits.json", "w", encoding="utf-8") as f:
+        json.dump(splits, f, indent=2)
+
+    out_scores = run_dir / "scores_per_sample.jsonl"
+    with open(out_scores, "w", encoding="utf-8") as f:
+        for i in range(len(y)):
+            if tr_m[i]:
+                sp = "train"
+            elif va_m[i]:
+                sp = "val"
+            else:
+                sp = "test"
+            row = {
+                "i": i,
+                "label": int(y[i]),
+                "source": sources[i],
+                "split": sp,
+                "infilling_score": float(infilling[i]),
+                "wbc_score": float(wbc[i]),
+                "memtrace_p_member": float(memtrace_p[i]),
+            }
+            if infilling_raw is not None:
+                row["infilling_score_raw"] = float(infilling_raw[i])
+            if wbc_raw is not None:
+                row["wbc_score_raw"] = float(wbc_raw[i])
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    print(f"Wrote {run_dir / 'evaluation_splits.json'}")
+    print(f"Wrote {out_scores}")
+
+
 def _split_masks(
     y: np.ndarray,
     test_fraction: float,
@@ -158,7 +240,7 @@ def main() -> None:
 
         ev = cfg.get("evaluation") or {}
         test_f = float(ev.get("test_fraction", 0.2))
-        val_f = float(ev.get("val_fraction", 0.15))
+        val_f = float(ev.get("val_fraction", 0.2))
         rs = int(ev.get("random_state", 42))
         tr_m, va_m, te_m = _split_masks(y, test_f, val_f, rs)
 
@@ -186,13 +268,15 @@ def main() -> None:
             auc_va, _ = _auc_direction(y[va_m], scores[va_m])
             if best_inf is None or auc_va > best_inf[0]:
                 auc_te, _ = _auc_direction(y[te_m], scores[te_m])
-                best_inf = (auc_va, params, float(auc_te))
+                best_inf = (auc_va, dict(params), float(auc_te), scores.copy())
 
         assert best_inf is not None
+        s_inf_oriented = _orient_scores_full(y, va_m, best_inf[3])
         results["methods"]["infilling"] = {
-            "best_params": best_inf[1],
+            "best_params": _jsonable(best_inf[1]),
             "val_auc": best_inf[0],
             "test_auc": best_inf[2],
+            "score_orientation": "higher_is_member_on_val_split",
         }
 
         # ----- WBC -----
@@ -208,7 +292,12 @@ def main() -> None:
 
         best_wbc = None
         for params in iter_grid(grid_wbc):
-            p2 = dict(params)
+            p2 = {
+                k: m_wbc[k]
+                for k in ("ensemble_variants", "use_ensemble", "ensemble_aggregate")
+                if k in m_wbc
+            }
+            p2.update(params)
             if p2.get("window_sizes") is None:
                 p2.pop("window_sizes", None)
             scores = np.array(
@@ -218,13 +307,15 @@ def main() -> None:
             auc_va, _ = _auc_direction(y[va_m], scores[va_m])
             if best_wbc is None or auc_va > best_wbc[0]:
                 auc_te, _ = _auc_direction(y[te_m], scores[te_m])
-                best_wbc = (auc_va, params, float(auc_te))
+                best_wbc = (auc_va, dict(p2), float(auc_te), scores.copy())
 
         assert best_wbc is not None
+        s_wbc_oriented = _orient_scores_full(y, va_m, best_wbc[3])
         results["methods"]["wbc"] = {
-            "best_params": best_wbc[1],
+            "best_params": _jsonable(best_wbc[1]),
             "val_auc": best_wbc[0],
             "test_auc": best_wbc[2],
+            "score_orientation": "higher_is_member_on_val_split",
         }
 
         del model_t, model_r
@@ -244,24 +335,47 @@ def main() -> None:
         print("Computing memTrace features (slow, large memory)...")
         X_mt = compute_feature_matrix(cfg, bundle, texts, mt_max_len)
         best_mt = None
+        best_mt_proba: np.ndarray | None = None
         for params in iter_grid(grid_mt):
             params = {**params, "max_length": mt_max_len}
-            _, meta = fit_rf_on_splits(X_mt, y, tr_m, va_m, te_m, params, rs)
+            proba_all, meta = fit_rf_on_splits(X_mt, y, tr_m, va_m, te_m, params, rs)
             auc_va = meta["val_auc"]
             if best_mt is None or auc_va > best_mt[0]:
-                best_mt = (auc_va, params, meta["test_auc"])
+                best_mt = (auc_va, dict(params), meta["test_auc"])
+                best_mt_proba = np.asarray(proba_all, dtype=np.float64).copy()
 
-        assert best_mt is not None
+        assert best_mt is not None and best_mt_proba is not None
+        bp = {k: v for k, v in best_mt[1].items() if k != "max_length"}
         results["methods"]["memtrace"] = {
-            "best_params": {k: v for k, v in best_mt[1].items() if k != "max_length"},
+            "best_params": _jsonable(bp),
             "val_auc": best_mt[0],
             "test_auc": best_mt[2],
             "max_length": mt_max_len,
+            "score_orientation": "memtrace_p_member_is_RF_P(class=1)",
         }
 
+        results["saved_artifacts"] = {
+            "evaluation_splits": "evaluation_splits.json",
+            "scores_per_sample": "scores_per_sample.jsonl",
+        }
+
+        _save_evaluation_artifacts(
+            run_dir,
+            y=y,
+            sources=sources,
+            tr_m=tr_m,
+            va_m=va_m,
+            te_m=te_m,
+            infilling=s_inf_oriented,
+            wbc=s_wbc_oriented,
+            memtrace_p=best_mt_proba,
+            infilling_raw=best_inf[3],
+            wbc_raw=best_wbc[3],
+        )
+
         with open(results_path, "w", encoding="utf-8") as f:
-            json.dump(results, f, indent=2)
-        print(json.dumps(results, indent=2))
+            json.dump(_jsonable(results), f, indent=2)
+        print(json.dumps(_jsonable(results), indent=2))
 
 
 if __name__ == "__main__":
