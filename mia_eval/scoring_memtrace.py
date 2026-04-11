@@ -73,7 +73,8 @@ def compute_feature_matrix(
 
 def _sanitize_feature_matrix(X: np.ndarray) -> np.ndarray:
     """Finite values only; StandardScaler rejects inf/nan."""
-    out = np.asarray(X, dtype=np.float64, copy=True)
+    # np.asarray(..., copy=) is NumPy 2+ only; np.array(..., copy=True) works on 1.x.
+    out = np.array(X, dtype=np.float64, copy=True)
     np.nan_to_num(out, copy=False, nan=0.0, posinf=1e10, neginf=-1e10)
     return out
 
