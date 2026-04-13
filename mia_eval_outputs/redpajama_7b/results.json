@@ -1,0 +1,40 @@
+{
+  "model": "redpajama_7b",
+  "n_samples": 192,
+  "methods": {
+    "infilling": {
+      "best_params": {
+        "m": 1,
+        "k": 0.2
+      },
+      "val_auc": 0.7222222222222222,
+      "test_auc": 0.71875,
+      "score_orientation": "higher_is_member_on_val_split"
+    },
+    "wbc": {
+      "best_params": {
+        "min_window": 2,
+        "max_window": 72,
+        "num_windows": 8
+      },
+      "val_auc": 0.5757575757575758,
+      "test_auc": 0.8125,
+      "score_orientation": "higher_is_member_on_val_split"
+    },
+    "memtrace": {
+      "best_params": {
+        "n_estimators": 150,
+        "max_depth": 5,
+        "min_samples_leaf": 2
+      },
+      "val_auc": 1.0,
+      "test_auc": 1.0,
+      "max_length": 256,
+      "score_orientation": "memtrace_p_member_is_RF_P(class=1)"
+    }
+  },
+  "saved_artifacts": {
+    "evaluation_splits": "evaluation_splits.json",
+    "scores_per_sample": "scores_per_sample.jsonl"
+  }
+}
