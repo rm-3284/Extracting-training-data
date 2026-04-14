@@ -22,10 +22,13 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from sklearn.metrics import roc_auc_score
-from sklearn.model_selection import train_test_split
-
 from mia_eval.config_loader import active_model_bundle, iter_grid, load_merged_config, apply_dot_overrides
+from mia_eval.evaluation_common import (
+    auc_direction as _auc_direction,
+    jsonable as _jsonable,
+    orient_scores_full as _orient_scores_full,
+    split_masks as _split_masks,
+)
 from mia_eval.generation import generate_diverse_samples
 from mia_eval.ground_truth import TrainingShingleIndex, build_index_from_hf
 from mia_eval.labeling import label_jsonl, load_labeled
@@ -33,48 +36,6 @@ from mia_eval.model_utils import load_causal_lm, pick_device, torch_dtype_from_s
 from mia_eval.scoring_infilling import score_texts as infilling_scores
 from mia_eval.scoring_memtrace import compute_feature_matrix, fit_rf_on_splits
 from mia_eval.scoring_wbc import score_texts as wbc_scores
-
-
-def _auc_direction(y: np.ndarray, s: np.ndarray) -> tuple[float, np.ndarray]:
-    """Return max(AUC(s), AUC(-s)) and the score vector to use."""
-    s = np.asarray(s, dtype=np.float64)
-    a0 = float(roc_auc_score(y, s))
-    a1 = float(roc_auc_score(y, -s))
-    if a1 > a0:
-        return a1, -s
-    return a0, s
-
-
-def _orient_scores_full(
-    y: np.ndarray, mask: np.ndarray, scores_full: np.ndarray
-) -> np.ndarray:
-    """Flip sign on all samples if -score has higher AUC than score on mask (higher = member)."""
-    s = np.asarray(scores_full, dtype=np.float64)
-    ym, sm = y[mask], s[mask]
-    if ym.size == 0 or len(np.unique(ym)) < 2:
-        return s
-    try:
-        a0 = float(roc_auc_score(ym, sm))
-        a1 = float(roc_auc_score(ym, -sm))
-        return -s if a1 > a0 else s
-    except ValueError:
-        return s
-
-
-def _jsonable(obj):
-    if isinstance(obj, dict):
-        return {str(k): _jsonable(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [_jsonable(v) for v in obj]
-    if isinstance(obj, tuple):
-        return [_jsonable(v) for v in obj]
-    if isinstance(obj, (np.integer, np.int64, np.int32)):
-        return int(obj)
-    if isinstance(obj, (np.floating, np.float64, np.float32)):
-        return float(obj)
-    if isinstance(obj, np.ndarray):
-        return obj.tolist()
-    return obj
 
 
 def _save_evaluation_artifacts(
@@ -125,36 +86,6 @@ def _save_evaluation_artifacts(
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
     print(f"Wrote {run_dir / 'evaluation_splits.json'}")
     print(f"Wrote {out_scores}")
-
-
-def _split_masks(
-    y: np.ndarray,
-    test_fraction: float,
-    val_fraction: float,
-    random_state: int,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    n = len(y)
-    idx = np.arange(n)
-    idx_train, idx_test = train_test_split(
-        idx,
-        test_size=test_fraction,
-        stratify=y,
-        random_state=random_state,
-    )
-    rel_val = val_fraction / (1.0 - test_fraction)
-    idx_train, idx_val = train_test_split(
-        idx_train,
-        test_size=rel_val,
-        stratify=y[idx_train],
-        random_state=random_state,
-    )
-    tr = np.zeros(n, dtype=bool)
-    va = np.zeros(n, dtype=bool)
-    te = np.zeros(n, dtype=bool)
-    tr[idx_train] = True
-    va[idx_val] = True
-    te[idx_test] = True
-    return tr, va, te
 
 
 def main() -> None:
