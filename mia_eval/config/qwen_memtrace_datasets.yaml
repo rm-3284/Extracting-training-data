@@ -87,12 +87,33 @@ non_member_proxy_streams:
 # Optional member addons (pass ``--include coder math`` to prepare script)
 # ---------------------------------------------------------------------------
 coder_member_proxy_streams:
-  - id: thestack_python_slice
-    hf_path: bigcode/the-stack
-    hf_name: data/python
-    text_field: content
+  # ``bigcode/the-stack`` Hub configs vary by ``datasets`` version (often only ``default``).
+  # This ungated instruction+code mix avoids ``data/python`` / gated the-stack failures.
+  - id: codealpaca_20k
+    hf_path: HuggingFaceH4/CodeAlpaca_20K
+    hf_name: null
+    text_field: prompt
+    completion_field: completion
     max_samples: 1500
-    note: "Large stream — keep max_samples modest; for Qwen2.5-Coder memTrace experiments."
+    note: "CodeAlpaca-style pairs; member proxy for Coder experiments (not raw GitHub)."
+
+  # Optional: Python-only raw code (gated; may require HF login + Hub terms).
+  # Uncomment if you accept BigCode terms and your ``datasets`` build exposes this API:
+  # - id: starcoder_python
+  #   hf_path: bigcode/starcoderdata
+  #   hf_name: null
+  #   data_dir: python
+  #   text_field: content
+  #   max_samples: 1500
+  #
+  # Optional: ``the-stack`` default config + extension filter (also gated):
+  # - id: thestack_default_py
+  #   hf_path: bigcode/the-stack
+  #   hf_name: null
+  #   text_field: content
+  #   ext_field: ext
+  #   ext_equals: ".py"
+  #   max_samples: 1500
 
 math_member_proxy_streams:
   - id: open_web_math

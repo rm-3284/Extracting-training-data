@@ -49,16 +49,37 @@ def _open_stream(
     name = stream.get("hf_name")
     split = stream.get("split", defaults.get("split", "train"))
     streaming = stream.get("streaming", defaults.get("streaming", True))
+    extra: Dict[str, Any] = {}
+    # e.g. bigcode/starcoderdata Python slice (when Hub + access allow it)
+    if stream.get("data_dir"):
+        extra["data_dir"] = stream["data_dir"]
     if name in (None, "", "null", "None"):
-        return load_dataset(path, split=split, streaming=streaming)
-    return load_dataset(path, name, split=split, streaming=streaming)
+        return load_dataset(path, split=split, streaming=streaming, **extra)
+    return load_dataset(path, name, split=split, streaming=streaming, **extra)
 
 
-def _row_text(row: Dict[str, Any], text_field: str) -> str:
+def _row_text(row: Dict[str, Any], stream: Dict[str, Any]) -> str:
+    text_field = stream["text_field"]
     t = row.get(text_field) or row.get("text") or row.get("content") or ""
     if not isinstance(t, str):
-        return ""
+        t = ""
+    t = t.strip()
+    cf = stream.get("completion_field")
+    if cf:
+        u = row.get(cf) or ""
+        if isinstance(u, str) and u.strip():
+            t = (t + "\n\n" + u.strip()).strip() if t else u.strip()
     return t.strip()
+
+
+def _passes_row_filter(row: Dict[str, Any], stream: Dict[str, Any]) -> bool:
+    lf, le = stream.get("lang_field"), stream.get("lang_equals")
+    if lf and le is not None and str(row.get(lf, "")).lower() != str(le).lower():
+        return False
+    ef, ee = stream.get("ext_field"), stream.get("ext_equals")
+    if ef and ee is not None and str(row.get(ef, "")).lower() != str(ee).lower():
+        return False
+    return True
 
 
 def _passes_date(
@@ -90,7 +111,6 @@ def _collect_stream(
 ) -> Iterator[Dict[str, Any]]:
     min_c = int(defaults.get("min_chars", 180))
     max_c = int(defaults.get("max_chars", 6000))
-    text_field = stream["text_field"]
     cap = int(stream["max_samples"])
     date_field = stream.get("date_field")
     date_on_or_after = stream.get("date_on_or_after")
@@ -106,7 +126,9 @@ def _collect_stream(
             break
         if not _passes_date(row, date_field, date_on_or_after):
             continue
-        text = _row_text(row, text_field)
+        if not _passes_row_filter(row, stream):
+            continue
+        text = _row_text(row, stream)
         if len(text) < min_c:
             continue
         if len(text) > max_c:

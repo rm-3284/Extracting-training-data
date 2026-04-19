@@ -21,6 +21,8 @@ python -m mia_eval.prepare_memtrace_proxy_jsonl \
   --include coder math
 ```
 
+The **coder** add-on uses **`HuggingFaceH4/CodeAlpaca_20K`** (ungated). Older YAML used `bigcode/the-stack` with config `data/python`, which many `datasets` installs no longer expose (only `default`, often gated)—see commented alternatives in `qwen_memtrace_datasets.yaml`.
+
 If a **CC-MAIN-2025-** config is renamed on the Hub, edit the YAML shard names. Set **`HF_TOKEN`** for rate limits on large corpora.
 
 ## Positive (member-like) proxies
