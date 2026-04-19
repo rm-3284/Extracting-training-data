@@ -57,9 +57,52 @@ Avoid claiming **zero** n-gram overlap with all historical data—use wording li
 3. **Non-members**: sample from **timestamped** sources strictly after cutoff; mix domains (paper abstracts + news).
 4. Extract memTrace **features** on Qwen **target**; fit **StandardScaler + RF** on train; validate on held-out **proxy** labels and report **caveats** in writing.
 
-## Training the RF artifact for `--memtrace-rf`
+## Train one memTrace RF per Qwen preset (automated)
 
-Fit on your labeled `(features, proxy_label)` table, then save either:
+After `prepare_memtrace_proxy_jsonl`:
+
+```bash
+python -m mia_eval.train_memtrace_rf \
+  --config mia_eval/config/defaults.yaml \
+  --experiment mia_eval/config/qwen2p5.yaml \
+  --proxy-jsonl data/qwen_memtrace_proxy_train.jsonl \
+  --output-dir data/memtrace_rfs_qwen \
+  --use-yaml-presets
+```
+
+Uses **`memtrace_train_presets`** and **`memtrace_rf_train`** in `qwen2p5.yaml`. Writes `<preset>_memtrace_rf.joblib` plus `memtrace_rf_manifest.json`. Each artifact is valid **only** for that preset’s architecture (feature length matches layer/head layout).
+
+Override which checkpoints: `--presets qwen25_7b_base,distil_qwen25_7b_instruct`. Lower VRAM: reduce **`memtrace_rf_train.feature_batch_size`** in YAML.
+
+### Slurm: one GPU job per model
+
+Use a **job array** so each task runs **`--preset <one_model>`** (parallel training; each task writes its own `*_memtrace_rf.joblib` and `*_memtrace_rf_manifest.json`).
+
+Template (edit `#SBATCH` and `cd` for your site):
+
+```bash
+mkdir -p logs
+export PROXY_JSONL=/path/to/qwen_memtrace_proxy_train.jsonl
+export OUT_DIR=/path/to/memtrace_rfs_qwen
+export REPO=/path/to/Extracting-training-data
+sbatch mia_eval/scripts/slurm/train_memtrace_qwen_array.sbatch
+```
+
+The script `mia_eval/scripts/slurm/train_memtrace_qwen_array.sbatch` maps `SLURM_ARRAY_TASK_ID` 0–4 to the five presets (keep in sync with `memtrace_train_presets` in `qwen2p5.yaml`).
+
+**Without arrays:** loop `sbatch` with `--wrap`:
+
+```bash
+for p in qwen25_7b_base qwen25_7b_instruct qwen25_7b_coder qwen25_7b_math distil_qwen25_7b_instruct; do
+  sbatch --gres=gpu:1 --job-name="mt_$p" --wrap="cd \$REPO && python -m mia_eval.train_memtrace_rf --config mia_eval/config/defaults.yaml --experiment mia_eval/config/qwen2p5.yaml --proxy-jsonl data/qwen_memtrace_proxy_train.jsonl --output-dir data/memtrace_rfs_qwen --preset $p"
+done
+```
+
+(Escape or export `REPO` so the compute node sees the right path.)
+
+## Training the RF artifact for `--memtrace-rf` (manual)
+
+Alternatively fit on your own `(features, proxy_label)` table, then save either:
 
 - a **`sklearn.pipeline.Pipeline`** `[StandardScaler, RandomForestClassifier]`, or  
 - `joblib.dump({"scaler": scaler, "rf": rf}, "qwen_memtrace_rf.joblib")`

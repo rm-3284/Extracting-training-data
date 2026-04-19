@@ -62,7 +62,7 @@ python -m mia_eval.score_sequence \
   --text "Your candidate string here."
 ```
 
-**memTrace proxy JSONL** (for RF training on Qwen checkpoints): see `config/qwen_memtrace_datasets.yaml` and run `python -m mia_eval.prepare_memtrace_proxy_jsonl --output data/qwen_memtrace_proxy_train.jsonl` (details in `docs/qwen_memtrace_proxy.md`).
+**memTrace proxy JSONL** (for RF training on Qwen checkpoints): see `config/qwen_memtrace_datasets.yaml` and run `python -m mia_eval.prepare_memtrace_proxy_jsonl --output data/qwen_memtrace_proxy_train.jsonl` (details in `docs/qwen_memtrace_proxy.md`). Then train one RF per preset: `python -m mia_eval.train_memtrace_rf --config mia_eval/config/defaults.yaml --experiment mia_eval/config/qwen2p5.yaml --proxy-jsonl data/qwen_memtrace_proxy_train.jsonl --output-dir data/memtrace_rfs_qwen --use-yaml-presets`.
 
 Artifacts go to `mia_eval_outputs/<active_model>/`:
 

@@ -49,3 +49,19 @@ score_sequence:
     max_window: 40
     num_windows: 8
   memtrace_max_length: 512
+
+# Presets to train memTrace RF on proxy JSONL (see ``train_memtrace_rf.py``).
+memtrace_train_presets:
+  - qwen25_7b_base
+  - qwen25_7b_instruct
+  - qwen25_7b_coder
+  - qwen25_7b_math
+  - distil_qwen25_7b_instruct
+
+# RF hyperparameters (transfer-friendly defaults; same as mia_eval grid winners).
+memtrace_rf_train:
+  n_estimators: 250
+  max_depth: 5
+  min_samples_leaf: 2
+  random_state: 42
+  feature_batch_size: 2
