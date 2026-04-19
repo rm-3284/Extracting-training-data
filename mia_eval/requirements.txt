@@ -4,4 +4,5 @@ transformers>=4.36
 datasets>=2.14
 pyyaml>=6.0
 scikit-learn>=1.2
+joblib>=1.2
 tqdm>=4.65

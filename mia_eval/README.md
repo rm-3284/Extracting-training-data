@@ -50,6 +50,20 @@ python -m mia_eval.run_pipeline \
   --steps evaluate
 ```
 
+## Score a sequence (no shingle pipeline)
+
+For **Qwen2.5** and other targets, `score_sequence.py` runs **infilling**, **WBC**, and **memTrace features** on demand (optional `joblib` RF for `p_member`). Presets live in `config/qwen2p5.yaml`; proxy-data guidance for memTrace RF training is in `docs/qwen_memtrace_proxy.md`.
+
+```bash
+python -m mia_eval.score_sequence \
+  --config mia_eval/config/defaults.yaml \
+  --experiment mia_eval/config/qwen2p5.yaml \
+  --preset qwen25_7b_base \
+  --text "Your candidate string here."
+```
+
+**memTrace proxy JSONL** (for RF training on Qwen checkpoints): see `config/qwen_memtrace_datasets.yaml` and run `python -m mia_eval.prepare_memtrace_proxy_jsonl --output data/qwen_memtrace_proxy_train.jsonl` (details in `docs/qwen_memtrace_proxy.md`).
+
 Artifacts go to `mia_eval_outputs/<active_model>/`:
 
 - `training_shingle_index.json` — saved index

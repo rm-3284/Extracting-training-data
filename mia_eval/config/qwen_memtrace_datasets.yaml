@@ -1,0 +1,103 @@
+# =============================================================================
+# memTrace RF training — PROXY labels for Qwen2.5-family checkpoints
+# =============================================================================
+# These are NOT Qwen’s private training manifest. Use for relative ranking /
+# RF calibration only; cite as “proxy member / proxy non-member per stream.”
+#
+# Qwen2.5 public release context (verify on each model card):
+#   - Treat “temporal negatives” as text from Common Crawl dumps dated **after**
+#     the checkpoint’s stated pretraining knowledge cutoff (often ~2024-09 for 2.5).
+#   - CC-MAIN-2025-* configs are strong **post-release web** negatives vs a ~2024 PT snapshot.
+#
+# Materialize JSONL:
+#   python -m mia_eval.prepare_memtrace_proxy_jsonl \\
+#     --manifest mia_eval/config/qwen_memtrace_datasets.yaml \\
+#     --output data/qwen_memtrace_proxy_train.jsonl
+# =============================================================================
+
+version: 1
+description: "Parquet-first HF streams for memTrace RF (Qwen2.5 / DistilQwen experiments)."
+
+defaults:
+  min_chars: 180
+  max_chars: 6000
+  split: train
+  streaming: true
+
+# ---------------------------------------------------------------------------
+# label 1 = “member proxy” (broad web / edu / legacy mix likely in big LM PT)
+# ---------------------------------------------------------------------------
+member_proxy_streams:
+  - id: fineweb_sample_10bt
+    hf_path: HuggingFaceFW/fineweb
+    hf_name: sample-10BT
+    text_field: text
+    max_samples: 3500
+    note: "Large English web sample; common PT-style coverage."
+
+  - id: fineweb_edu_sample_10bt
+    hf_path: HuggingFaceFW/fineweb-edu
+    hf_name: sample-10BT
+    text_field: text
+    max_samples: 2500
+    note: "Educational web subset; still PT-style, different slice than raw FineWeb."
+
+  - id: pile_10k_debug
+    hf_path: NeelNanda/pile-10k
+    hf_name: null
+    text_field: text
+    max_samples: 800
+    note: "Small Pile slice — good for debugging; weak Qwen-specific signal."
+
+# ---------------------------------------------------------------------------
+# label 0 = “non-member proxy” — mix OOD + post-cutoff web
+# ---------------------------------------------------------------------------
+non_member_proxy_streams:
+  # --- OOD (not temporal; robust on datasets>=3.6, no Wikipedia script) ---
+  - id: ag_news_ood
+    hf_path: ag_news
+    hf_name: null
+    text_field: text
+    max_samples: 1200
+    note: "News classification corpus; OOD vs generic web PT mix."
+
+  - id: imdb_ood
+    hf_path: stanfordnlp/imdb
+    hf_name: null
+    text_field: text
+    max_samples: 1200
+    note: "Movie reviews; stylistically OOD for encyclopedic/web PT slices."
+
+  # --- Temporal / post-release web (FineWeb-Edu crawl shards, 2025) ---
+  - id: fineweb_edu_ccmain_2025_08
+    hf_path: HuggingFaceFW/fineweb-edu
+    hf_name: CC-MAIN-2025-08
+    text_field: text
+    max_samples: 1500
+    note: "Entire shard is CC-MAIN-2025-08 crawl → strong post–Qwen2.5(2024) PT proxy negative."
+
+  - id: fineweb_edu_ccmain_2025_05
+    hf_path: HuggingFaceFW/fineweb-edu
+    hf_name: CC-MAIN-2025-05
+    text_field: text
+    max_samples: 1500
+    note: "Second 2025 crawl shard for diversity (swap if Hub drops a config)."
+
+# ---------------------------------------------------------------------------
+# Optional member addons (pass ``--include coder math`` to prepare script)
+# ---------------------------------------------------------------------------
+coder_member_proxy_streams:
+  - id: thestack_python_slice
+    hf_path: bigcode/the-stack
+    hf_name: data/python
+    text_field: content
+    max_samples: 1500
+    note: "Large stream — keep max_samples modest; for Qwen2.5-Coder memTrace experiments."
+
+math_member_proxy_streams:
+  - id: open_web_math
+    hf_path: open-web-math/open-web-math
+    hf_name: null
+    text_field: text
+    max_samples: 2000
+    note: "Math-heavy web text; for Qwen2.5-Math memTrace experiments."

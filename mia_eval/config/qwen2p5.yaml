@@ -1,0 +1,51 @@
+# Merge over defaults:  python -m mia_eval.score_sequence --config mia_eval/config/defaults.yaml --experiment mia_eval/config/qwen2p5.yaml --preset qwen25_7b_base --text "Hello"
+#
+# WBC references are same-family smaller checkpoints (1.5B–3B) where available.
+
+experiment:
+  max_length_tokens: 512
+  device: null
+
+active_model: qwen25_7b_base
+
+models:
+  qwen25_7b_base:
+    target_model: Qwen/Qwen2.5-7B
+    reference_model: Qwen/Qwen2.5-1.5B
+    tokenizer: Qwen/Qwen2.5-7B
+    torch_dtype: bfloat16
+
+  qwen25_7b_instruct:
+    target_model: Qwen/Qwen2.5-7B-Instruct
+    reference_model: Qwen/Qwen2.5-1.5B-Instruct
+    tokenizer: Qwen/Qwen2.5-7B-Instruct
+    torch_dtype: bfloat16
+
+  qwen25_7b_coder:
+    target_model: Qwen/Qwen2.5-Coder-7B
+    reference_model: Qwen/Qwen2.5-Coder-1.5B
+    tokenizer: Qwen/Qwen2.5-Coder-7B
+    torch_dtype: bfloat16
+
+  qwen25_7b_math:
+    target_model: Qwen/Qwen2.5-Math-7B
+    reference_model: Qwen/Qwen2.5-Math-1.5B
+    tokenizer: Qwen/Qwen2.5-Math-7B
+    torch_dtype: bfloat16
+
+  distil_qwen25_7b_instruct:
+    target_model: alibaba-pai/DistilQwen2.5-7B-Instruct
+    reference_model: Qwen/Qwen2.5-3B-Instruct
+    tokenizer: alibaba-pai/DistilQwen2.5-7B-Instruct
+    torch_dtype: bfloat16
+
+# Fixed scoring hyperparameters (transfer-friendly defaults from mia_eval grid).
+score_sequence:
+  infilling:
+    m: 5
+    k: 0.2
+  wbc:
+    min_window: 2
+    max_window: 40
+    num_windows: 8
+  memtrace_max_length: 512

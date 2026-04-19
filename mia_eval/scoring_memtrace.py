@@ -49,6 +49,31 @@ def _features_one(
     return vec
 
 
+@torch.inference_mode()
+def extract_memtrace_features_with_model(
+    model: Any,
+    tokenizer: Any,
+    texts: List[str],
+    max_length: int,
+    device: torch.device,
+    *,
+    show_progress: bool = False,
+) -> np.ndarray:
+    """
+    memTrace feature rows for ``texts`` using an already-loaded target model (eager attention recommended).
+    Avoids reloading weights when combining with infilling/WBC on the same checkpoint.
+    """
+    lm_head = resolve_lm_head(model)
+    if show_progress:
+        it = tqdm(texts, desc="memTrace features")
+    else:
+        it = texts
+    rows: List[np.ndarray] = [
+        _features_one(model, tokenizer, lm_head, t, device, max_length) for t in it
+    ]
+    return np.stack(rows, axis=0)
+
+
 def compute_feature_matrix(
     cfg: Dict[str, Any],
     model_bundle: Dict[str, Any],
@@ -64,11 +89,9 @@ def compute_feature_matrix(
     model, tokenizer = load_causal_lm(
         target, tok_id, device, dtype, attn_implementation="eager"
     )
-    lm_head = resolve_lm_head(model)
-    rows: List[np.ndarray] = []
-    for t in tqdm(texts, desc="memTrace features"):
-        rows.append(_features_one(model, tokenizer, lm_head, t, device, max_length))
-    return np.stack(rows, axis=0)
+    return extract_memtrace_features_with_model(
+        model, tokenizer, texts, max_length, device, show_progress=True
+    )
 
 
 def _sanitize_feature_matrix(X: np.ndarray) -> np.ndarray:
