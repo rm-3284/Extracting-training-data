@@ -1,0 +1,90 @@
+{
+  "source_model": "gpt_neo_2p7",
+  "target_model": "redpajama_7b",
+  "source_results_path": "mia_eval_outputs/gpt_neo_2p7/results.json",
+  "target_labeled_path": "mia_eval_outputs/redpajama_7b/samples_labeled.jsonl",
+  "n_samples": 192,
+  "split": {
+    "test_fraction": 0.2,
+    "val_fraction": 0.2,
+    "random_state": 42
+  },
+  "transferred": {
+    "infilling": {
+      "params": {
+        "m": 1,
+        "k": 0.2
+      },
+      "val_auc": 0.7222222222222222,
+      "test_auc": 0.71875,
+      "score_orientation": "higher_is_member_on_val_split"
+    },
+    "wbc": {
+      "params": {
+        "min_window": 2,
+        "max_window": 40,
+        "num_windows": 12
+      },
+      "val_auc": 0.5606060606060606,
+      "test_auc": 0.8080357142857143,
+      "score_orientation": "higher_is_member_on_val_split"
+    },
+    "memtrace": {
+      "params": {
+        "max_depth": 5,
+        "n_estimators": 250,
+        "min_samples_leaf": 2
+      },
+      "val_auc": 1.0,
+      "test_auc": 1.0,
+      "max_length": 256,
+      "score_orientation": "memtrace_p_member_is_RF_P(class=1)"
+    }
+  },
+  "oracle_on_target": {
+    "infilling": {
+      "best_params": {
+        "m": 1,
+        "k": 0.2
+      },
+      "val_auc": 0.7222222222222222,
+      "test_auc": 0.71875
+    },
+    "wbc": {
+      "best_params": {
+        "min_window": 2,
+        "max_window": 72,
+        "num_windows": 8
+      },
+      "val_auc": 0.5757575757575758,
+      "test_auc": 0.8125
+    },
+    "memtrace": {
+      "best_params": {
+        "n_estimators": 150,
+        "max_depth": 5,
+        "min_samples_leaf": 2
+      },
+      "val_auc": 1.0,
+      "test_auc": 1.0
+    }
+  },
+  "oracle_results_path": "mia_eval_outputs/redpajama_7b/results.json",
+  "comparison_test_auc": {
+    "infilling": {
+      "transferred_from_source": 0.71875,
+      "oracle_on_target": 0.71875,
+      "oracle_minus_transferred": 0.0
+    },
+    "wbc": {
+      "transferred_from_source": 0.8080357142857143,
+      "oracle_on_target": 0.8125,
+      "oracle_minus_transferred": 0.004464285714285698
+    },
+    "memtrace": {
+      "transferred_from_source": 1.0,
+      "oracle_on_target": 1.0,
+      "oracle_minus_transferred": 0.0
+    }
+  }
+}

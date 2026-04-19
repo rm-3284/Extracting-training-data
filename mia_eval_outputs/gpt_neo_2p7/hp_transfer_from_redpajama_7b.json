@@ -1,0 +1,90 @@
+{
+  "source_model": "redpajama_7b",
+  "target_model": "gpt_neo_2p7",
+  "source_results_path": "mia_eval_outputs/redpajama_7b/results.json",
+  "target_labeled_path": "mia_eval_outputs/gpt_neo_2p7/samples_labeled.jsonl",
+  "n_samples": 192,
+  "split": {
+    "test_fraction": 0.2,
+    "val_fraction": 0.2,
+    "random_state": 42
+  },
+  "transferred": {
+    "infilling": {
+      "params": {
+        "m": 1,
+        "k": 0.2
+      },
+      "val_auc": 0.5491071428571429,
+      "test_auc": 0.5401785714285714,
+      "score_orientation": "higher_is_member_on_val_split"
+    },
+    "wbc": {
+      "params": {
+        "min_window": 2,
+        "max_window": 72,
+        "num_windows": 8
+      },
+      "val_auc": 0.6294642857142857,
+      "test_auc": 0.8169642857142857,
+      "score_orientation": "higher_is_member_on_val_split"
+    },
+    "memtrace": {
+      "params": {
+        "min_samples_leaf": 2,
+        "n_estimators": 150,
+        "max_depth": 5
+      },
+      "val_auc": 0.9821428571428571,
+      "test_auc": 1.0,
+      "max_length": 256,
+      "score_orientation": "memtrace_p_member_is_RF_P(class=1)"
+    }
+  },
+  "oracle_on_target": {
+    "infilling": {
+      "best_params": {
+        "m": 1,
+        "k": 0.2
+      },
+      "val_auc": 0.5491071428571429,
+      "test_auc": 0.5401785714285714
+    },
+    "wbc": {
+      "best_params": {
+        "min_window": 2,
+        "max_window": 40,
+        "num_windows": 12
+      },
+      "val_auc": 0.6383928571428572,
+      "test_auc": 0.8035714285714286
+    },
+    "memtrace": {
+      "best_params": {
+        "n_estimators": 250,
+        "max_depth": 5,
+        "min_samples_leaf": 2
+      },
+      "val_auc": 0.9866071428571429,
+      "test_auc": 1.0
+    }
+  },
+  "oracle_results_path": "mia_eval_outputs/gpt_neo_2p7/results.json",
+  "comparison_test_auc": {
+    "infilling": {
+      "transferred_from_source": 0.5401785714285714,
+      "oracle_on_target": 0.5401785714285714,
+      "oracle_minus_transferred": 0.0
+    },
+    "wbc": {
+      "transferred_from_source": 0.8169642857142857,
+      "oracle_on_target": 0.8035714285714286,
+      "oracle_minus_transferred": -0.013392857142857095
+    },
+    "memtrace": {
+      "transferred_from_source": 1.0,
+      "oracle_on_target": 1.0,
+      "oracle_minus_transferred": 0.0
+    }
+  }
+}
