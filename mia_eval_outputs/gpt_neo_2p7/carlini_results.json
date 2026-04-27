@@ -1,0 +1,31 @@
+{
+  "model": "gpt_neo_2p7",
+  "n_samples": 192,
+  "metrics": {
+    "Perplexity": {
+      "precision@10": 0.8,
+      "precision@50": 0.86,
+      "precision@100": 0.87
+    },
+    "Small": {
+      "precision@10": 0.7,
+      "precision@50": 0.62,
+      "precision@100": 0.72
+    },
+    "zlib": {
+      "precision@10": 0.8,
+      "precision@50": 0.88,
+      "precision@100": 0.89
+    },
+    "Lowercase": {
+      "precision@10": 0.9,
+      "precision@50": 0.74,
+      "precision@100": 0.79
+    },
+    "Window": {
+      "precision@10": 0.8,
+      "precision@50": 0.84,
+      "precision@100": 0.79
+    }
+  }
+}
