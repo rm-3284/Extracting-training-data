@@ -1,0 +1,31 @@
+{
+  "model": "redpajama_7b",
+  "n_samples": 192,
+  "metrics": {
+    "Perplexity": {
+      "precision@10": 0.4,
+      "precision@50": 0.58,
+      "precision@100": 0.72
+    },
+    "Small": {
+      "precision@10": 0.5,
+      "precision@50": 0.66,
+      "precision@100": 0.77
+    },
+    "zlib": {
+      "precision@10": 0.4,
+      "precision@50": 0.58,
+      "precision@100": 0.73
+    },
+    "Lowercase": {
+      "precision@10": 0.5,
+      "precision@50": 0.64,
+      "precision@100": 0.74
+    },
+    "Window": {
+      "precision@10": 0.7,
+      "precision@50": 0.58,
+      "precision@100": 0.71
+    }
+  }
+}
