@@ -80,6 +80,10 @@ Artifacts go to `mia_eval_outputs/<active_model>/`:
 - `label` — apply index + heuristics
 - `evaluate` — load labels, grid search, write `results.json`
 
+### MIA reference scores (no shingle ground truth)
+
+For presets **without** `ground_truth` (e.g. Qwen in `config/qwen2p5.yaml`), use **`--steps all_mia_gt`** (or `generate,mia_annotate,mia_evaluate`). Each sample gets two triples of scores — **infilling**, **WBC**, **memTrace `p_member`** — at HPs from `mia_gt_pipeline` in the experiment YAML (open-model transferred infilling/WBC + pre-trained `*_memtrace_rf.joblib`). Outputs: `samples_mia_gt.jsonl`, `results_mia_gt.json` (Spearman matrices + mean abs delta between primary vs sensitivity combo). See `mia_eval/mia_gt_pipeline.py`.
+
 ## Requirements
 
 Large GPUs are recommended for **2.7B–7B** models and especially **memTrace** (`output_attentions=True`). The pipeline loads the target model with **eager attention** for memTrace so SDPA/Flash does not silently break attention features. Use smaller `generation.num_samples_per_strategy`, `methods.memtrace.max_length`, and `float16` in config if you hit OOM.

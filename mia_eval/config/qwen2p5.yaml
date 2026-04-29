@@ -65,3 +65,30 @@ memtrace_rf_train:
   min_samples_leaf: 2
   random_state: 42
   feature_batch_size: 2
+
+# --- MIA reference-score pipeline (no shingle labels) ---
+# Run: ``python -m mia_eval.run_pipeline --config .../defaults.yaml --experiment .../qwen2p5.yaml --steps all_mia_gt``
+# Writes ``samples_mia_gt.jsonl`` + ``results_mia_gt.json`` under ``experiment.output_dir/<active_model>/``.
+methods:
+  memtrace:
+    max_length: 256
+
+mia_gt_pipeline:
+  # Resolves ``{memtrace_rf_dir}/{active_model}_memtrace_rf.joblib`` unless ``memtrace_rf_joblib`` is set.
+  memtrace_rf_dir: data/memtrace_rfs_qwen
+  memtrace_max_length: 256
+  # Infilling / WBC: primary = transferred from open-model ``mia_eval_outputs/gpt_neo_2p7/results.json``-style winners.
+  open_model_infilling:
+    m: 1
+    k: 0.2
+  open_model_infilling_sensitivity:
+    m: 5
+    k: 0.2
+  open_model_wbc:
+    min_window: 2
+    max_window: 40
+    num_windows: 12
+  open_model_wbc_sensitivity:
+    min_window: 2
+    max_window: 56
+    num_windows: 10

@@ -4,6 +4,10 @@ End-to-end MIA evaluation vs training-data-derived labels.
 
 Steps: build_index | generate | label | evaluate
 
+**MIA reference scores (no shingle labels):** ``generate``, ``mia_annotate``,
+``mia_evaluate`` — or ``all_mia_gt`` for all three. See ``mia_gt_pipeline.py``
+and ``mia_gt_pipeline`` in experiment YAML.
+
 Run from repository root:
   python -m mia_eval.run_pipeline --config mia_eval/config/defaults.yaml --steps all
 """
@@ -32,6 +36,11 @@ from mia_eval.evaluation_common import (
 from mia_eval.generation import generate_diverse_samples
 from mia_eval.ground_truth import TrainingShingleIndex, build_index_from_hf
 from mia_eval.labeling import label_jsonl, load_labeled
+from mia_eval.mia_gt_pipeline import (
+    annotate_samples_mia_gt,
+    evaluate_mia_gt_jsonl,
+    resolve_memtrace_rf_joblib,
+)
 from mia_eval.model_utils import load_causal_lm, pick_device, torch_dtype_from_str
 from mia_eval.scoring_infilling import score_texts as infilling_scores
 from mia_eval.scoring_memtrace import compute_feature_matrix, fit_rf_on_splits
@@ -105,7 +114,10 @@ def main() -> None:
         "--steps",
         type=str,
         default="all",
-        help="Comma list: build_index,generate,label,evaluate,all",
+        help=(
+            "Comma list: build_index,generate,label,evaluate,all | "
+            "generate,mia_annotate,mia_evaluate | all_mia_gt"
+        ),
     )
     ap.add_argument("--set", action="append", default=[], help="Override e.g. active_model=pythia_2p8")
     args = ap.parse_args()
@@ -116,6 +128,9 @@ def main() -> None:
     cfg = apply_dot_overrides(cfg, args.set)
 
     steps = {x.strip() for x in args.steps.lower().split(",")}
+    if "all_mia_gt" in steps:
+        steps.discard("all_mia_gt")
+        steps |= {"generate", "mia_annotate", "mia_evaluate"}
     if "all" in steps:
         steps = {"build_index", "generate", "label", "evaluate"}
 
@@ -127,10 +142,22 @@ def main() -> None:
     bundle = active_model_bundle(cfg)
     gt_cfg = bundle.get("ground_truth") or {}
 
+    if ("mia_annotate" in steps or "mia_evaluate" in steps) and not gt_cfg:
+        gcfg = cfg.setdefault("generation", {})
+        n_ex = int(gcfg.get("add_training_excerpts_members", 0))
+        if n_ex > 0:
+            print(
+                "mia_gt pipeline: disabling add_training_excerpts_members (no ground_truth on this preset).",
+                file=sys.stderr,
+            )
+            gcfg["add_training_excerpts_members"] = 0
+
     index_path = run_dir / "training_shingle_index.json"
     samples_path = run_dir / "samples.jsonl"
     labeled_path = run_dir / "samples_labeled.jsonl"
     results_path = run_dir / "results.json"
+    mia_gt_path = run_dir / "samples_mia_gt.jsonl"
+    results_mia_gt_path = run_dir / "results_mia_gt.json"
 
     if "build_index" in steps:
         print("Building training shingle index...")
@@ -149,6 +176,32 @@ def main() -> None:
         print("Generating samples...")
         generate_diverse_samples(cfg, bundle, samples_path)
         print(f"Wrote {samples_path}")
+
+    if "mia_annotate" in steps:
+        print("Annotating samples with MIA reference score triples (no shingle labels)...")
+        n_done = annotate_samples_mia_gt(cfg, bundle, model_key, samples_path, mia_gt_path)
+        print(f"MIA-GT annotated n={n_done} -> {mia_gt_path}")
+
+    if "mia_evaluate" in steps:
+        if not mia_gt_path.is_file():
+            raise FileNotFoundError(f"Missing {mia_gt_path}; run mia_annotate after generate.")
+        print("Evaluating cross-method agreement (Spearman, HP sensitivity)...")
+        mia_res = evaluate_mia_gt_jsonl(mia_gt_path)
+        mia_res["model"] = model_key
+        mia_res["artifacts"] = {"samples_mia_gt": str(mia_gt_path.name)}
+        block = (cfg.get("mia_gt_pipeline") or {}) or {}
+        mia_res["hyperparams_used"] = {
+            "open_model_infilling_primary": block.get("open_model_infilling"),
+            "open_model_infilling_sensitivity": block.get("open_model_infilling_sensitivity"),
+            "open_model_wbc_primary": block.get("open_model_wbc"),
+            "open_model_wbc_sensitivity": block.get("open_model_wbc_sensitivity"),
+            "memtrace_rf_joblib": str(resolve_memtrace_rf_joblib(cfg, model_key)),
+            "memtrace_max_length": block.get("memtrace_max_length"),
+        }
+        with open(results_mia_gt_path, "w", encoding="utf-8") as f:
+            json.dump(_jsonable(mia_res), f, indent=2)
+        print(json.dumps(_jsonable(mia_res), indent=2))
+        print(f"Wrote {results_mia_gt_path}")
 
     if "label" in steps:
         print("Labeling samples...")
