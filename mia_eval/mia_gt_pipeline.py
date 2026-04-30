@@ -38,7 +38,8 @@ def _memtrace_p_batch(X: np.ndarray, joblib_path: Path) -> np.ndarray:
     import joblib
 
     obj: Any = joblib.load(joblib_path)
-    Xs = np.asarray(X, dtype=np.float64, copy=True).reshape(X.shape[0], -1)
+    # NumPy<2 does not support np.asarray(..., copy=...); use np.array for compatibility.
+    Xs = np.array(X, dtype=np.float64, copy=True).reshape(X.shape[0], -1)
     np.nan_to_num(Xs, copy=False, nan=0.0, posinf=1e10, neginf=-1e10)
     if hasattr(obj, "predict_proba"):
         return np.asarray(obj.predict_proba(Xs)[:, 1], dtype=np.float64)
