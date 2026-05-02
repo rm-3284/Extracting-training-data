@@ -1,0 +1,88 @@
+{
+  "n_samples": 160,
+  "spearman_primary": {
+    "rows": [
+      "infilling",
+      "wbc",
+      "memtrace_p_member"
+    ],
+    "matrix": [
+      [
+        1.0,
+        -0.17615434196648308,
+        0.292066096331888
+      ],
+      [
+        -0.17615434196648308,
+        1.0,
+        -0.45289757412398923
+      ],
+      [
+        0.292066096331888,
+        -0.45289757412398923,
+        1.0
+      ]
+    ]
+  },
+  "spearman_sensitivity": {
+    "rows": [
+      "infilling",
+      "wbc",
+      "memtrace_p_member"
+    ],
+    "matrix": [
+      [
+        1.0,
+        -0.1440114848236259,
+        0.25796320168756587
+      ],
+      [
+        -0.1440114848236259,
+        1.0,
+        -0.448529239423415
+      ],
+      [
+        0.25796320168756587,
+        -0.448529239423415,
+        1.0
+      ]
+    ]
+  },
+  "mean_abs_delta_primary_vs_sensitivity": {
+    "infilling": 0.19352630344219507,
+    "wbc": 0.008204632988626021,
+    "memtrace_p_member": 0.0
+  },
+  "note": "Spearman among infilling, WBC, and memTrace p_member at fixed HP; not supervised AUC vs training-data shingles.",
+  "exploratory_auc_vs_memtrace_median_split": {
+    "infilling_negated_for_higher_with_high_memtrace": 0.34109375,
+    "wbc": 0.22890625,
+    "note": "y=1 if memtrace_p > median; infilling negated so higher may align with y under infilling convention."
+  },
+  "model": "qwen25_7b_base",
+  "artifacts": {
+    "samples_mia_gt": "samples_mia_gt.jsonl"
+  },
+  "hyperparams_used": {
+    "open_model_infilling_primary": {
+      "m": 1,
+      "k": 0.2
+    },
+    "open_model_infilling_sensitivity": {
+      "m": 5,
+      "k": 0.2
+    },
+    "open_model_wbc_primary": {
+      "min_window": 2,
+      "max_window": 40,
+      "num_windows": 12
+    },
+    "open_model_wbc_sensitivity": {
+      "min_window": 2,
+      "max_window": 56,
+      "num_windows": 10
+    },
+    "memtrace_rf_joblib": "data/memtrace_rfs_qwen/qwen25_7b_base_memtrace_rf.joblib",
+    "memtrace_max_length": 256
+  }
+}

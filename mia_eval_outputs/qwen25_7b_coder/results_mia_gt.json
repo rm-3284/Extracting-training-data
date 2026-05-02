@@ -1,0 +1,88 @@
+{
+  "n_samples": 160,
+  "spearman_primary": {
+    "rows": [
+      "infilling",
+      "wbc",
+      "memtrace_p_member"
+    ],
+    "matrix": [
+      [
+        1.0,
+        -0.19550682940835232,
+        0.1958549040641948
+      ],
+      [
+        -0.19550682940835232,
+        1.0,
+        -0.3488906272446336
+      ],
+      [
+        0.1958549040641948,
+        -0.3488906272446336,
+        1.0
+      ]
+    ]
+  },
+  "spearman_sensitivity": {
+    "rows": [
+      "infilling",
+      "wbc",
+      "memtrace_p_member"
+    ],
+    "matrix": [
+      [
+        1.0,
+        -0.20236846577092332,
+        0.17474854901208542
+      ],
+      [
+        -0.20236846577092332,
+        1.0,
+        -0.3437839674922979
+      ],
+      [
+        0.17474854901208542,
+        -0.3437839674922979,
+        1.0
+      ]
+    ]
+  },
+  "mean_abs_delta_primary_vs_sensitivity": {
+    "infilling": 0.22663837616855745,
+    "wbc": 0.007894443804069989,
+    "memtrace_p_member": 0.0
+  },
+  "note": "Spearman among infilling, WBC, and memTrace p_member at fixed HP; not supervised AUC vs training-data shingles.",
+  "exploratory_auc_vs_memtrace_median_split": {
+    "infilling_negated_for_higher_with_high_memtrace": 0.3871875,
+    "wbc": 0.3215625,
+    "note": "y=1 if memtrace_p > median; infilling negated so higher may align with y under infilling convention."
+  },
+  "model": "qwen25_7b_coder",
+  "artifacts": {
+    "samples_mia_gt": "samples_mia_gt.jsonl"
+  },
+  "hyperparams_used": {
+    "open_model_infilling_primary": {
+      "m": 1,
+      "k": 0.2
+    },
+    "open_model_infilling_sensitivity": {
+      "m": 5,
+      "k": 0.2
+    },
+    "open_model_wbc_primary": {
+      "min_window": 2,
+      "max_window": 40,
+      "num_windows": 12
+    },
+    "open_model_wbc_sensitivity": {
+      "min_window": 2,
+      "max_window": 56,
+      "num_windows": 10
+    },
+    "memtrace_rf_joblib": "data/memtrace_rfs_qwen/qwen25_7b_coder_memtrace_rf.joblib",
+    "memtrace_max_length": 256
+  }
+}
