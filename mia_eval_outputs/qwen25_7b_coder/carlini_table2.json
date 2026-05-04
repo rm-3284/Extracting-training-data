@@ -1,0 +1,63 @@
+{
+  "model_key": "qwen25_7b_coder",
+  "target_model": "Qwen/Qwen2.5-Coder-7B",
+  "reference_model": "Qwen/Qwen2.5-Coder-1.5B",
+  "input": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/qwen25_7b_coder/samples_mia_gt.jsonl",
+  "n_samples": 160,
+  "max_length_tokens": 512,
+  "window": 50,
+  "has_labels": false,
+  "metrics": {
+    "Perplexity": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      }
+    },
+    "Small": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      }
+    },
+    "zlib": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      }
+    },
+    "Lowercase": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      }
+    },
+    "Window": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      }
+    }
+  },
+  "no_label_summary_note": "Carlini Table-2 metrics use heterogeneous scales (e.g. perplexity is unbounded; Small/zlib/Lowercase are log ratios). They are not probabilities in [0,1] (unlike WBC in mia_eval). With no labels, ``aggregate_over_samples`` substitutes for precision@k."
+}

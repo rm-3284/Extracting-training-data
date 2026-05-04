@@ -1,0 +1,63 @@
+{
+  "model_key": "qwen25_7b_base",
+  "target_model": "Qwen/Qwen2.5-7B",
+  "reference_model": "Qwen/Qwen2.5-1.5B",
+  "input": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/qwen25_7b_base/samples_mia_gt.jsonl",
+  "n_samples": 160,
+  "max_length_tokens": 512,
+  "window": 50,
+  "has_labels": false,
+  "metrics": {
+    "Perplexity": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": 4.3678180910646915,
+        "sum": 698.8508945703506,
+        "std": 2.7320613202552915,
+        "min": 1.0783830881118774,
+        "max": 14.618027687072754
+      }
+    },
+    "Small": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": 0.8100341796741638,
+        "sum": 129.6054687478662,
+        "std": 0.13154215657777607,
+        "min": 0.34367066853740463,
+        "max": 0.9939116784726252
+      }
+    },
+    "zlib": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": 0.20635008384840497,
+        "sum": 33.016013415744794,
+        "std": 0.10334289263123525,
+        "min": 0.012178402061030357,
+        "max": 0.5325155411350004
+      }
+    },
+    "Lowercase": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": 0.8826014216477633,
+        "sum": 141.21622746364213,
+        "std": 0.14365282709684166,
+        "min": 0.23784564714235265,
+        "max": 1.125589077289751
+      }
+    },
+    "Window": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": 4.282831481099128,
+        "sum": 685.2530369758606,
+        "std": 3.307609189740515,
+        "min": 1.1809502840042114,
+        "max": 23.792938232421875
+      }
+    }
+  },
+  "no_label_summary_note": "Carlini Table-2 metrics use heterogeneous scales (e.g. perplexity is unbounded; Small/zlib/Lowercase are log ratios). They are not probabilities in [0,1] (unlike WBC in mia_eval). With no labels, ``aggregate_over_samples`` substitutes for precision@k."
+}
