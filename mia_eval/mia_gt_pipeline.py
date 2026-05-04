@@ -140,22 +140,52 @@ def annotate_samples_mia_gt(
 
         torch.cuda.empty_cache()
 
+    s_sel: np.ndarray | None = None
+    sel_block = block.get("select") or {}
+    if sel_block.get("enabled"):
+        from mia_eval.scoring_morris2025_select import compute_select_last_layer_scores
+
+        base_id = str(sel_block.get("base_model") or "").strip()
+        if not base_id:
+            raise ValueError(
+                "mia_gt_pipeline.select.enabled requires mia_gt_pipeline.select.base_model "
+                "(HF model id for θ_0, same family as target θ_f)."
+            )
+        sel_max_len = int(sel_block.get("max_length", max_len))
+        s_sel = compute_select_last_layer_scores(
+            cfg,
+            bundle,
+            texts,
+            base_model_id=base_id,
+            tokenizer_id=tok_id,
+            max_length=min(max_len, sel_max_len),
+            n_monte_carlo=int(sel_block.get("n_monte_carlo", 4096)),
+            random_state=int(sel_block.get("random_state", 42)),
+            batch_size=int(sel_block.get("batch_size", 1)),
+        )
+
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         for i, r in enumerate(rows):
+            primary = {
+                "infilling": float(s_inf_p[i]),
+                "wbc": float(s_wbc_p[i]),
+                "memtrace_p_member": float(s_mt[i]),
+            }
+            sensitivity = {
+                "infilling": float(s_inf_s[i]),
+                "wbc": float(s_wbc_s[i]),
+                "memtrace_p_member": float(s_mt[i]),
+            }
+            if s_sel is not None:
+                v = float(s_sel[i])
+                primary["select_alignment_mc"] = v
+                sensitivity["select_alignment_mc"] = v
             doc = {
                 "text": r.get("text", ""),
                 "source": r.get("source", ""),
-                "mia_gt_primary": {
-                    "infilling": float(s_inf_p[i]),
-                    "wbc": float(s_wbc_p[i]),
-                    "memtrace_p_member": float(s_mt[i]),
-                },
-                "mia_gt_sensitivity": {
-                    "infilling": float(s_inf_s[i]),
-                    "wbc": float(s_wbc_s[i]),
-                    "memtrace_p_member": float(s_mt[i]),
-                },
+                "mia_gt_primary": primary,
+                "mia_gt_sensitivity": sensitivity,
             }
             for k in ("strategy", "top_k", "top_p"):
                 if k in r:
@@ -166,9 +196,8 @@ def annotate_samples_mia_gt(
     return len(rows)
 
 
-def _spearman_matrix(a: np.ndarray) -> Tuple[List[List[float]], List[str]]:
-    """a shape (n, 3) columns infilling, wbc, memtrace."""
-    names = ["infilling", "wbc", "memtrace_p_member"]
+def _spearman_matrix(a: np.ndarray, names: List[str]) -> Tuple[List[List[float]], List[str]]:
+    """``a`` shape (num_samples, num_metrics); Spearman between columns."""
     n = a.shape[1]
     mat = [[1.0] * n for _ in range(n)]
     try:
@@ -194,8 +223,12 @@ def _spearman_matrix(a: np.ndarray) -> Tuple[List[List[float]], List[str]]:
 
 def evaluate_mia_gt_jsonl(annotated_path: Path) -> Dict[str, Any]:
     rows = load_samples_jsonl(annotated_path)
-    p_inf, p_wbc, p_mt = [], [], []
-    s_inf, s_wbc, s_mt = [], [], []
+    p_inf, p_wbc, p_mt, p_sel = [], [], [], []
+    s_inf, s_wbc, s_mt, s_sel = [], [], [], []
+    has_sel = bool(
+        rows
+        and all("select_alignment_mc" in (r.get("mia_gt_primary") or {}) for r in rows)
+    )
     for r in rows:
         gp = r.get("mia_gt_primary") or {}
         gs = r.get("mia_gt_sensitivity") or {}
@@ -205,11 +238,22 @@ def evaluate_mia_gt_jsonl(annotated_path: Path) -> Dict[str, Any]:
         s_inf.append(float(gs.get("infilling", 0.0)))
         s_wbc.append(float(gs.get("wbc", 0.0)))
         s_mt.append(float(gs.get("memtrace_p_member", 0.0)))
+        if has_sel:
+            p_sel.append(float(gp.get("select_alignment_mc", 0.0)))
+            s_sel.append(float(gs.get("select_alignment_mc", 0.0)))
 
-    A_p = np.column_stack([p_inf, p_wbc, p_mt])
-    A_s = np.column_stack([s_inf, s_wbc, s_mt])
-    mat_p, names = _spearman_matrix(A_p)
-    mat_s, _ = _spearman_matrix(A_s)
+    names_p = ["infilling", "wbc", "memtrace_p_member"]
+    cols_p = [p_inf, p_wbc, p_mt]
+    cols_s = [s_inf, s_wbc, s_mt]
+    if has_sel:
+        names_p.append("select_alignment_mc")
+        cols_p.append(p_sel)
+        cols_s.append(s_sel)
+
+    A_p = np.column_stack(cols_p)
+    A_s = np.column_stack(cols_s)
+    mat_p, names = _spearman_matrix(A_p, names_p)
+    mat_s, _ = _spearman_matrix(A_s, names_p)
 
     d_inf = np.mean(np.abs(A_p[:, 0] - A_s[:, 0]))
     d_wbc = np.mean(np.abs(A_p[:, 1] - A_s[:, 1]))
@@ -225,8 +269,9 @@ def evaluate_mia_gt_jsonl(annotated_path: Path) -> Dict[str, Any]:
             "memtrace_p_member": float(d_mt),
         },
         "note": (
-            "Spearman among infilling, WBC, and memTrace p_member at fixed HP; "
-            "not supervised AUC vs training-data shingles."
+            "Spearman among infilling, WBC, memTrace p_member"
+            + (", and select_alignment_mc" if has_sel else "")
+            + " at fixed HP; not supervised AUC vs training-data shingles."
         ),
     }
 

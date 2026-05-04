@@ -197,6 +197,7 @@ def main() -> None:
             "open_model_wbc_sensitivity": block.get("open_model_wbc_sensitivity"),
             "memtrace_rf_joblib": str(resolve_memtrace_rf_joblib(cfg, model_key)),
             "memtrace_max_length": block.get("memtrace_max_length"),
+            "morris2025_select": block.get("select"),
         }
         with open(results_mia_gt_path, "w", encoding="utf-8") as f:
             json.dump(_jsonable(mia_res), f, indent=2)
