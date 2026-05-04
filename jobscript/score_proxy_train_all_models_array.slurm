@@ -12,12 +12,18 @@
 #SBATCH --output=logs/%A_%a/output.log
 #SBATCH --error=logs/%A_%a/error.log
 #SBATCH --partition=all
+#SBATCH --chdir=/n/fs/vision-mix/rm4411/Extracting-training-data
 #SBATCH --array=0-4
 #
 # One GPU job per model (5 tasks). Submit from repo root:
 #   sbatch jobscript/score_proxy_train_all_models_array.slurm
 
 set -euo pipefail
+
+export PROJECT_ROOT="${SLURM_SUBMIT_DIR:-/n/fs/vision-mix/rm4411/Extracting-training-data}"
+# shellcheck source=jobscript/_slurm_prologue.sh
+source "${PROJECT_ROOT}/jobscript/_slurm_prologue.sh"
+conda activate "${CONDA_ENV:-base}"
 
 mkdir -p "logs/${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
 
@@ -26,9 +32,6 @@ export TRANSFORMERS_CACHE=/n/fs/vision-mix/rm4411/huggingface
 export TORCH_HOME=/n/fs/vision-mix/rm4411/torch
 export XDG_CACHE_HOME=/n/fs/vision-mix/rm4411/cache
 export CACHE_DIR=/n/fs/vision-mix/rm4411/cache
-
-REPO_ROOT="${REPO_ROOT:-${SLURM_SUBMIT_DIR:-.}}"
-cd "${REPO_ROOT}" || exit 1
 
 MODELS=(
   qwen25_7b_base
@@ -46,10 +49,6 @@ EXTRA=()
 if [[ "${PROXY_PRIMARY_ONLY:-0}" == "1" ]]; then
   EXTRA+=(--primary-only)
 fi
-
-# shellcheck source=jobscript/_conda.sh
-source "${REPO_ROOT}/jobscript/_conda.sh"
-conda activate "${CONDA_ENV:-base}"
 
 python -m mia_eval.score_proxy_jsonl \
   --input data/qwen_memtrace_proxy_train.jsonl \

@@ -12,21 +12,27 @@
 #SBATCH --output=logs/%j/output.log
 #SBATCH --error=logs/%j/error.log
 #SBATCH --partition=all
+#SBATCH --chdir=/n/fs/vision-mix/rm4411/Extracting-training-data
+#
+# Edit --chdir (and PROJECT_ROOT in jobscript/_slurm_prologue.sh) if your clone path differs.
 #
 # Score ``data/qwen_memtrace_proxy_train.jsonl`` with infilling + WBC + memtrace
 # (``mia_eval.score_proxy_jsonl`` — one process, shared model loads).
 #
-# Submit from repo root (so paths resolve), or set REPO_ROOT:
 #   sbatch jobscript/score_proxy_train.slurm
 #   sbatch --export=ALL,MODEL=qwen25_7b_base jobscript/score_proxy_train.slurm
 #
-# If conda is not under ~/miniconda3|~/anaconda3|..., set e.g.:
-#   export CONDA_ROOT=/n/fs/.../miniconda3
-# Optional env name (default base): export CONDA_ENV=cos484
+# Conda: same as a working Slurm script — ``conda`` on PATH + ``conda shell.bash hook``
+# (see jobscript/_slurm_prologue.sh). Optional: export CONDA_ENV=your_env
 #
 # Models: qwen25_7b_base | qwen25_7b_instruct | qwen25_7b_coder | qwen25_7b_math | distil_qwen25_7b_instruct
 
 set -euo pipefail
+
+export PROJECT_ROOT="${SLURM_SUBMIT_DIR:-/n/fs/vision-mix/rm4411/Extracting-training-data}"
+# shellcheck source=jobscript/_slurm_prologue.sh
+source "${PROJECT_ROOT}/jobscript/_slurm_prologue.sh"
+conda activate "${CONDA_ENV:-base}"
 
 mkdir -p "logs/${SLURM_JOB_ID:-manual}"
 
@@ -35,9 +41,6 @@ export TRANSFORMERS_CACHE=/n/fs/vision-mix/rm4411/huggingface
 export TORCH_HOME=/n/fs/vision-mix/rm4411/torch
 export XDG_CACHE_HOME=/n/fs/vision-mix/rm4411/cache
 export CACHE_DIR=/n/fs/vision-mix/rm4411/cache
-
-REPO_ROOT="${REPO_ROOT:-${SLURM_SUBMIT_DIR:-.}}"
-cd "${REPO_ROOT}" || exit 1
 
 MODEL="${MODEL:-qwen25_7b_coder}"
 OUT_DIR="data/proxy_scored/${MODEL}"
@@ -48,10 +51,6 @@ EXTRA=()
 if [[ "${PROXY_PRIMARY_ONLY:-0}" == "1" ]]; then
   EXTRA+=(--primary-only)
 fi
-
-# shellcheck source=jobscript/_conda.sh
-source "${REPO_ROOT}/jobscript/_conda.sh"
-conda activate "${CONDA_ENV:-base}"
 
 python -m mia_eval.score_proxy_jsonl \
   --input data/qwen_memtrace_proxy_train.jsonl \

@@ -10,6 +10,7 @@
 #SBATCH --output=logs/%j/merge_out.log
 #SBATCH --error=logs/%j/merge_err.log
 #SBATCH --partition=all
+#SBATCH --chdir=/n/fs/vision-mix/rm4411/Extracting-training-data
 #
 # After all shard jobs finish for one MODEL and NUM_SHARDS:
 #   export MODEL=qwen25_7b_base
@@ -20,10 +21,12 @@
 
 set -euo pipefail
 
-mkdir -p "logs/${SLURM_JOB_ID}"
+export PROJECT_ROOT="${SLURM_SUBMIT_DIR:-/n/fs/vision-mix/rm4411/Extracting-training-data}"
+# shellcheck source=jobscript/_slurm_prologue.sh
+source "${PROJECT_ROOT}/jobscript/_slurm_prologue.sh"
+conda activate "${CONDA_ENV:-base}"
 
-REPO_ROOT="${REPO_ROOT:-${SLURM_SUBMIT_DIR:-.}}"
-cd "${REPO_ROOT}" || exit 1
+mkdir -p "logs/${SLURM_JOB_ID}"
 
 MODEL="${MODEL:?export MODEL=...}"
 NUM_SHARDS="${NUM_SHARDS:?export NUM_SHARDS=...}"
@@ -32,10 +35,6 @@ EXPECTED="${EXPECTED_ROWS:-12201}"
 SHARD_GLOB="data/proxy_scored/${MODEL}/shards/qwen_memtrace_proxy_train_scored_shard*_of_$(printf '%04d' "${NUM_SHARDS}").jsonl"
 OUT_DIR="data/proxy_scored/${MODEL}"
 mkdir -p "${OUT_DIR}"
-
-# shellcheck source=jobscript/_conda.sh
-source "${REPO_ROOT}/jobscript/_conda.sh"
-conda activate "${CONDA_ENV:-base}"
 
 MERGE_ARGS=(
   --glob "${SHARD_GLOB}"
