@@ -97,6 +97,72 @@ def _best_threshold_balanced_accuracy(
     return best_t, float(best_ba)
 
 
+def _midpoint_class_medians(
+    scores: np.ndarray,
+    labels: np.ndarray,
+    *,
+    higher_is_member: bool,
+) -> Optional[Tuple[float, float]]:
+    """Fallback when ROC-style sweep has no valid split (e.g. near-constant scores)."""
+    y = labels.astype(np.int64)
+    if len(np.unique(y)) < 2:
+        return None
+    s = np.asarray(scores, dtype=np.float64)
+    m0 = float(np.median(s[y == 0]))
+    m1 = float(np.median(s[y == 1]))
+    t = (m0 + m1) / 2.0
+    if higher_is_member:
+        pred = (s > t).astype(np.int64)
+    else:
+        pred = (s < t).astype(np.int64)
+    if int(pred.sum()) in (0, len(pred)):
+        t = m1 if higher_is_member else m0
+        if higher_is_member:
+            pred = (s > t).astype(np.int64)
+        else:
+            pred = (s < t).astype(np.int64)
+    if int(pred.sum()) in (0, len(pred)):
+        smin, smax = float(np.min(s)), float(np.max(s))
+        if smin == smax:
+            return None
+        t = smax if higher_is_member else smin
+        if higher_is_member:
+            pred = (s > t).astype(np.int64)
+            if int(pred.sum()) in (0, len(pred)):
+                t = smin - 1e-9
+                pred = (s > t).astype(np.int64)
+        else:
+            pred = (s < t).astype(np.int64)
+            if int(pred.sum()) in (0, len(pred)):
+                t = smax + 1e-9
+                pred = (s < t).astype(np.int64)
+    if int(pred.sum()) in (0, len(pred)):
+        return None
+    ba = _balanced_accuracy(y, pred)
+    return float(t), float(ba)
+
+
+def _majority_class_threshold(
+    scores: np.ndarray,
+    labels: np.ndarray,
+    *,
+    higher_is_member: bool,
+) -> Tuple[float, float]:
+    """Last resort when scores are constant: pick t so the score rule matches majority vote; BA matches that vote."""
+    y = labels.astype(np.int64)
+    s = np.asarray(scores, dtype=np.float64)
+    maj = 0 if int((y == 0).sum()) >= int((y == 1).sum()) else 1
+    pred = np.full_like(y, maj)
+    ba = _balanced_accuracy(y, pred)
+    smin, smax = float(np.min(s)), float(np.max(s))
+    eps = 1e-9 * max(1.0, abs(smax))
+    if higher_is_member:
+        t = (smin - eps) if maj == 1 else (smax + eps)
+    else:
+        t = (smax + eps) if maj == 1 else (smin - eps)
+    return t, float(ba)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="Write proxy MIA thresholds JSON from a scored JSONL with label 0/1."
@@ -144,19 +210,35 @@ def main() -> None:
         ("infilling", np.asarray(inf, dtype=np.float64), False),
     ):
         got = _best_threshold_balanced_accuracy(arr, labels, higher_is_member=hi_mem)
+        method = "max_balanced_accuracy"
         if got is None:
+            got = _midpoint_class_medians(arr, labels, higher_is_member=hi_mem)
+            method = "midpoint_class_medians_fallback"
+        if got is None and len(np.unique(arr)) == 1 and len(np.unique(labels)) == 2:
+            t, ba = _majority_class_threshold(arr, labels, higher_is_member=hi_mem)
+            got = (t, ba)
+            method = "constant_scores_majority_baseline"
+        if got is None:
+            nu = int(len(np.unique(arr)))
+            n0, n1 = int((labels == 0).sum()), int((labels == 1).sum())
+            print(
+                f"Warning: no threshold for {name} (unique_scores={nu}, n_label0={n0}, n_label1={n1}).",
+                file=sys.stderr,
+            )
             continue
         t, ba = got
         out_thr[name] = {
             "threshold": float(t),
             "higher_is_member": hi_mem,
-            "method": "max_balanced_accuracy",
+            "method": method,
             "balanced_accuracy_on_calibration": float(ba),
         }
 
     if len(out_thr) < 2:
+        n0, n1 = int((labels == 0).sum()), int((labels == 1).sum())
         raise SystemExit(
-            "Could not derive infilling and wbc thresholds (check class balance and score diversity)."
+            "Could not derive infilling and wbc thresholds after max-BA and class-median fallback. "
+            f"Check proxy labels (n0={n0}, n1={n1}) and that infilling/wbc vary in the merged JSONL."
         )
 
     mt_fix = float(args.memtrace_p_fixed)
