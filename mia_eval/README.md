@@ -80,6 +80,27 @@ Artifacts go to `mia_eval_outputs/<active_model>/`:
 - `label` — apply index + heuristics
 - `evaluate` — load labels, grid search, write `results.json`
 
+### MIA reference scores (no shingle ground truth)
+
+For presets **without** `ground_truth` (e.g. Qwen in `config/qwen2p5.yaml`), use **`--steps all_mia_gt`** (or `generate,mia_annotate,mia_evaluate`). Each sample gets two triples of scores — **infilling**, **WBC**, **memTrace `p_member`** — at HPs from `mia_gt_pipeline` in the experiment YAML (open-model transferred infilling/WBC + pre-trained `*_memtrace_rf.joblib`). Outputs: `samples_mia_gt.jsonl`, `results_mia_gt.json` (Spearman matrices + mean abs delta between primary vs sensitivity combo). See `mia_eval/mia_gt_pipeline.py`.
+
+Optional **Morris et al. (2025)** arXiv:2506.15553–inspired diagnostic: set `mia_gt_pipeline.select.enabled: true` and `base_model` (θ₀) vs target θ_f; adds **`select_alignment_mc`** and extends Spearman in `results_mia_gt.json`. This is **not** the full SELECT / greedy / JL pipeline — see `mia_eval/docs/morris_2025_select.md`.
+
+### Carlini et al. (2021) Table 2 scores (Qwen and any preset)
+
+The extraction repo’s ``run_carlini.py`` only lists Neo / Pythia / RedPajama. For **Qwen** (or any ``models`` entry with ``target_model`` + ``reference_model``), run:
+
+```bash
+python -m mia_eval.run_carlini_table2 \
+  --config mia_eval/config/defaults.yaml \
+  --experiment mia_eval/config/qwen2p5.yaml \
+  --set active_model=qwen25_7b_base \
+  --input mia_eval_outputs/qwen25_7b_base/samples.jsonl \
+  --scores-jsonl mia_eval_outputs/qwen25_7b_base/carlini_table2_scores.jsonl
+```
+
+Omit ``--input`` to default to ``mia_eval_outputs/<active_model>/samples.jsonl``. Writes ``carlini_table2.json``. If every line has integer ``label``, reports **precision@k** (true memorization labels). If labels are missing but every line has ``mia_gt_primary`` with ``infilling``, ``wbc``, and ``memtrace_p_member`` (e.g. ``samples_mia_gt.jsonl``), also writes **``proxy_precision_at_k``**: same P@k ranking, but pseudo-labels from **median splits** on those three MIA scores (see ``proxy_precision_at_k_note`` in the JSON). Otherwise only **aggregate** stats. Carlini scores are **not** all in ``[0,1]``. Same metrics as ``Extracting-Training-Data-from-Large-Langauge-Models/run_carlini.py``.
+
 ## Requirements
 
 Large GPUs are recommended for **2.7B–7B** models and especially **memTrace** (`output_attentions=True`). The pipeline loads the target model with **eager attention** for memTrace so SDPA/Flash does not silently break attention features. Use smaller `generation.num_samples_per_strategy`, `methods.memtrace.max_length`, and `float16` in config if you hit OOM.

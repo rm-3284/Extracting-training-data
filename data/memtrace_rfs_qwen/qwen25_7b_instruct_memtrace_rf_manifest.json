@@ -1,0 +1,22 @@
+{
+  "proxy_jsonl": "/n/fs/vision-mix/rm4411/Extracting-training-data/data/qwen_memtrace_proxy_coder_math.jsonl",
+  "n_rows": 512,
+  "class_counts": {
+    "0": 192,
+    "1": 320
+  },
+  "presets": [
+    "qwen25_7b_instruct"
+  ],
+  "rf_params": {
+    "n_estimators": 100,
+    "max_depth": 5,
+    "min_samples_leaf": 2,
+    "random_state": 42
+  },
+  "memtrace_max_length": 256,
+  "feature_batch_size": 2,
+  "artifacts": {
+    "qwen25_7b_instruct": "/n/fs/vision-mix/rm4411/Extracting-training-data/data/memtrace_rfs_qwen/qwen25_7b_instruct_memtrace_rf.joblib"
+  }
+}

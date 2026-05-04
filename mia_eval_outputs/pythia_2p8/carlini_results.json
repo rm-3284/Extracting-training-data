@@ -1,0 +1,31 @@
+{
+  "model": "pythia_2p8",
+  "n_samples": 192,
+  "metrics": {
+    "Perplexity": {
+      "precision@10": 1.0,
+      "precision@50": 0.9,
+      "precision@100": 0.85
+    },
+    "Small": {
+      "precision@10": 0.9,
+      "precision@50": 0.72,
+      "precision@100": 0.73
+    },
+    "zlib": {
+      "precision@10": 1.0,
+      "precision@50": 0.9,
+      "precision@100": 0.85
+    },
+    "Lowercase": {
+      "precision@10": 1.0,
+      "precision@50": 0.74,
+      "precision@100": 0.79
+    },
+    "Window": {
+      "precision@10": 1.0,
+      "precision@50": 0.86,
+      "precision@100": 0.79
+    }
+  }
+}
