@@ -31,7 +31,9 @@ cd "${REPO_ROOT}" || exit 1
 
 MODEL="${MODEL:-qwen25_7b_coder}"
 
-conda activate base
+# shellcheck source=jobscript/_conda.sh
+source "${REPO_ROOT}/jobscript/_conda.sh"
+conda activate "${CONDA_ENV:-base}"
 
 python -m mia_eval.run_carlini_table2 \
   --config mia_eval/config/defaults.yaml \

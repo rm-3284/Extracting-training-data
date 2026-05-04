@@ -20,6 +20,10 @@
 #   sbatch jobscript/score_proxy_train.slurm
 #   sbatch --export=ALL,MODEL=qwen25_7b_base jobscript/score_proxy_train.slurm
 #
+# If conda is not under ~/miniconda3|~/anaconda3|..., set e.g.:
+#   export CONDA_ROOT=/n/fs/.../miniconda3
+# Optional env name (default base): export CONDA_ENV=cos484
+#
 # Models: qwen25_7b_base | qwen25_7b_instruct | qwen25_7b_coder | qwen25_7b_math | distil_qwen25_7b_instruct
 
 set -euo pipefail
@@ -45,7 +49,9 @@ if [[ "${PROXY_PRIMARY_ONLY:-0}" == "1" ]]; then
   EXTRA+=(--primary-only)
 fi
 
-conda activate base
+# shellcheck source=jobscript/_conda.sh
+source "${REPO_ROOT}/jobscript/_conda.sh"
+conda activate "${CONDA_ENV:-base}"
 
 python -m mia_eval.score_proxy_jsonl \
   --input data/qwen_memtrace_proxy_train.jsonl \

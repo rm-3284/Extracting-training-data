@@ -33,7 +33,9 @@ SHARD_GLOB="data/proxy_scored/${MODEL}/shards/qwen_memtrace_proxy_train_scored_s
 OUT_DIR="data/proxy_scored/${MODEL}"
 mkdir -p "${OUT_DIR}"
 
-conda activate base
+# shellcheck source=jobscript/_conda.sh
+source "${REPO_ROOT}/jobscript/_conda.sh"
+conda activate "${CONDA_ENV:-base}"
 
 MERGE_ARGS=(
   --glob "${SHARD_GLOB}"

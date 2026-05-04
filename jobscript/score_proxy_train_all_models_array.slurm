@@ -47,7 +47,9 @@ if [[ "${PROXY_PRIMARY_ONLY:-0}" == "1" ]]; then
   EXTRA+=(--primary-only)
 fi
 
-conda activate base
+# shellcheck source=jobscript/_conda.sh
+source "${REPO_ROOT}/jobscript/_conda.sh"
+conda activate "${CONDA_ENV:-base}"
 
 python -m mia_eval.score_proxy_jsonl \
   --input data/qwen_memtrace_proxy_train.jsonl \
