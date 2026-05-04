@@ -1,0 +1,25 @@
+{
+  "schema": "mia_eval.proxy_thresholds.v1",
+  "description": "infilling/wbc: threshold maximizing balanced accuracy on proxy stream labels; memtrace_p_member: fixed 0.5 (higher_is_member). Eval: wbc/memtrace \u2192 y=1 if score > t; infilling \u2192 y=1 if score < t.",
+  "source_jsonl": "/n/fs/vision-mix/rm4411/Extracting-training-data/data/proxy_scored/qwen25_7b_base/calib_512_merged.jsonl",
+  "n_rows_used": 512,
+  "thresholds": {
+    "wbc": {
+      "threshold": 0.3761014996308961,
+      "higher_is_member": true,
+      "method": "max_balanced_accuracy",
+      "balanced_accuracy_on_calibration": 0.50278036657347
+    },
+    "infilling": {
+      "threshold": -0.5684452056884766,
+      "higher_is_member": false,
+      "method": "max_balanced_accuracy",
+      "balanced_accuracy_on_calibration": 0.536672879776328
+    },
+    "memtrace_p_member": {
+      "threshold": 0.5,
+      "higher_is_member": true,
+      "method": "fixed_user"
+    }
+  }
+}
