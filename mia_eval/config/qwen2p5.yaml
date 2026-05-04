@@ -92,3 +92,14 @@ mia_gt_pipeline:
     min_window: 2
     max_window: 56
     num_windows: 10
+  # Optional: Morris et al. arXiv:2506.15553-style **diagnostic** (Monte Carlo LM-head alignment).
+  # Not the full SELECT / greedy / JL pipeline — see ``mia_eval/docs/morris_2025_select.md``.
+  # For Instruct presets set ``base_model`` to the matching Base checkpoint; leave disabled for pure Base.
+  select:
+    enabled: false
+    # base_model: Qwen/Qwen2.5-7B
+    n_monte_carlo: 4096
+    random_state: 42
+    batch_size: 1
+    max_length: 256
+    # score_device: cpu   # if two 7B models do not fit on one GPU

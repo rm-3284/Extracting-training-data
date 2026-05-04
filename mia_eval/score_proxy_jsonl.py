@@ -36,7 +36,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -82,7 +82,7 @@ def _calibration_block(
     y: np.ndarray,
     inf: np.ndarray,
     wbc: np.ndarray,
-    mt: np.ndarray,
+    mt: Optional[np.ndarray],
 ) -> Dict[str, Any]:
     """Summaries on proxy labels (0 = non-member proxy, 1 = member proxy)."""
     yb = y.astype(bool)
@@ -92,11 +92,12 @@ def _calibration_block(
         "n_proxy_label_1": n1,
         "metrics": {},
     }
-    specs = [
+    specs: List[Tuple[str, np.ndarray, str]] = [
         ("infilling", inf, "lower_is_member_proxy_like"),
         ("wbc", wbc, "higher_is_member_proxy_like"),
-        ("memtrace_p_member", mt, "higher_is_member_proxy_like"),
     ]
+    if mt is not None:
+        specs.append(("memtrace_p_member", mt, "higher_is_member_proxy_like"))
     for name, s, orient in specs:
         s = np.asarray(s, dtype=np.float64)
         med0 = float(np.median(s[~yb])) if n0 else float("nan")
@@ -120,13 +121,17 @@ def score_proxy_rows(
     global_row_indices: List[int],
     batch_size: int,
     primary_only: bool,
+    skip_memtrace: bool = False,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    rf_path = resolve_memtrace_rf_joblib(cfg, model_key)
-    if not rf_path.is_file():
-        raise FileNotFoundError(
-            f"memTrace RF not found: {rf_path}. Train with train_memtrace_rf or set "
-            "mia_gt_pipeline.memtrace_rf_joblib / memtrace_rf_dir."
-        )
+    rf_path: Optional[Path] = None
+    if not skip_memtrace:
+        rf_path = resolve_memtrace_rf_joblib(cfg, model_key)
+        if not rf_path.is_file():
+            raise FileNotFoundError(
+                f"memTrace RF not found: {rf_path}. Train with train_memtrace_rf or set "
+                "mia_gt_pipeline.memtrace_rf_joblib / memtrace_rf_dir. "
+                "Or pass skip_memtrace=True / --skip-memtrace for infilling+WBC only."
+            )
 
     block = (cfg.get("mia_gt_pipeline") or {}) or {}
     exp = cfg.get("experiment") or {}
@@ -162,7 +167,7 @@ def score_proxy_rows(
     s_inf_s = np.empty(n, dtype=np.float64) if not primary_only else None
     s_wbc_p = np.empty(n, dtype=np.float64)
     s_wbc_s = np.empty(n, dtype=np.float64) if not primary_only else None
-    s_mt = np.empty(n, dtype=np.float64)
+    s_mt: Optional[np.ndarray] = None if skip_memtrace else np.empty(n, dtype=np.float64)
 
     print(f"[score_proxy] Loading target {target} (eager attn)…", file=sys.stderr, flush=True)
     model_t, tok = load_causal_lm(target, tok_id, device, dtype, attn_implementation="eager")
@@ -202,10 +207,12 @@ def score_proxy_rows(
                 max_length=max_len,
             )
 
-        X_mt = extract_memtrace_features_with_model(
-            model_t, tok, batch_texts, mt_len, device, show_progress=False
-        )
-        s_mt[start:end] = _memtrace_p_batch(X_mt, rf_path)
+        if not skip_memtrace:
+            assert s_mt is not None and rf_path is not None
+            X_mt = extract_memtrace_features_with_model(
+                model_t, tok, batch_texts, mt_len, device, show_progress=False
+            )
+            s_mt[start:end] = _memtrace_p_batch(X_mt, rf_path)
 
     del model_t, model_r
     if device.type == "cuda":
@@ -251,22 +258,28 @@ def score_proxy_rows(
         primary: Dict[str, Any] = {
             "infilling": float(s_inf_p[i]),
             "wbc": float(s_wbc_p[i]),
-            "memtrace_p_member": float(s_mt[i]),
         }
+        if not skip_memtrace:
+            assert s_mt is not None
+            primary["memtrace_p_member"] = float(s_mt[i])
         if primary_only:
             # Same schema as ``annotate_samples_mia_gt``; infilling/WBC not recomputed at sens HPs.
             sensitivity = {
                 "infilling": float(s_inf_p[i]),
                 "wbc": float(s_wbc_p[i]),
-                "memtrace_p_member": float(s_mt[i]),
             }
+            if not skip_memtrace:
+                assert s_mt is not None
+                sensitivity["memtrace_p_member"] = float(s_mt[i])
         else:
             assert s_inf_s is not None and s_wbc_s is not None
             sensitivity = {
                 "infilling": float(s_inf_s[i]),
                 "wbc": float(s_wbc_s[i]),
-                "memtrace_p_member": float(s_mt[i]),
             }
+            if not skip_memtrace:
+                assert s_mt is not None
+                sensitivity["memtrace_p_member"] = float(s_mt[i])
         if s_sel is not None:
             v = float(s_sel[i])
             primary["select_alignment_mc"] = v
@@ -284,7 +297,8 @@ def score_proxy_rows(
     cal_meta: Dict[str, Any] = {
         "proxy_row_index_min": int(min(global_row_indices)) if global_row_indices else -1,
         "proxy_row_index_max": int(max(global_row_indices)) if global_row_indices else -1,
-        "memtrace_rf": str(rf_path),
+        "memtrace_rf": str(rf_path) if rf_path else None,
+        "skip_memtrace": skip_memtrace,
         "primary_only": primary_only,
         "mia_gt_sensitivity_note": (
             "infilling and wbc duplicate primary when --primary-only."
@@ -336,6 +350,11 @@ def main() -> None:
         "--primary-only",
         action="store_true",
         help="Only primary infilling/WBC HPs (skip sensitivity infilling/WBC passes).",
+    )
+    ap.add_argument(
+        "--skip-memtrace",
+        action="store_true",
+        help="Do not run memTrace features or RF (mia_gt_primary has infilling + wbc only). Faster calibration.",
     )
     ap.add_argument("--max-rows", type=int, default=0, help="If >0, cap this shard to at most N rows (after sharding).")
     ap.add_argument(
@@ -439,6 +458,7 @@ def main() -> None:
         global_row_indices=global_indices,
         batch_size=args.batch_size,
         primary_only=args.primary_only,
+        skip_memtrace=bool(args.skip_memtrace),
     )
 
     gi_sorted = sorted(global_indices)

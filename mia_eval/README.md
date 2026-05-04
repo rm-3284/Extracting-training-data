@@ -99,7 +99,7 @@ python -m mia_eval.run_carlini_table2 \
   --scores-jsonl mia_eval_outputs/qwen25_7b_base/carlini_table2_scores.jsonl
 ```
 
-Omit ``--input`` to default to ``mia_eval_outputs/<active_model>/samples.jsonl``. Writes ``carlini_table2.json``. If every line has integer ``label``, reports **precision@k**; otherwise reports **mean / sum / std / min / max** over all rows per metric (Carlini scores are **not** all in ``[0,1]``—perplexity is unbounded; ratios are log-based). Same metrics as ``Extracting-Training-Data-from-Large-Langauge-Models/run_carlini.py``: target perplexity, small-model ratio, zlib log ratio, lowercase ratio, sliding-window perplexity.
+Omit ``--input`` to default to ``mia_eval_outputs/<active_model>/samples.jsonl``. Writes ``carlini_table2.json``. If every line has integer ``label``, reports **precision@k** (true memorization labels). If labels are missing but every line has ``mia_gt_primary`` with ``infilling``, ``wbc``, and ``memtrace_p_member`` (e.g. ``samples_mia_gt.jsonl``), also writes **``proxy_precision_at_k``**: same P@k ranking, but pseudo-labels from **median splits** on those three MIA scores (see ``proxy_precision_at_k_note`` in the JSON). Otherwise only **aggregate** stats. Carlini scores are **not** all in ``[0,1]``. Same metrics as ``Extracting-Training-Data-from-Large-Langauge-Models/run_carlini.py``.
 
 ## Requirements
 

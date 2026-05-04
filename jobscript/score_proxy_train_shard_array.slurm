@@ -13,16 +13,26 @@
 #SBATCH --error=logs/%A_%a/err.log
 #SBATCH --partition=all
 #SBATCH --chdir=/n/fs/vision-mix/rm4411/Extracting-training-data
-#SBATCH --array=0-31
 #
-# Shards one model’s proxy scoring across 32 GPUs (tune --array upper bound to NUM_SHARDS-1).
-# Submit once per MODEL after exporting NUM_SHARDS:
-#   export MODEL=qwen25_7b_base
-#   export NUM_SHARDS=32
+# IMPORTANT: The Slurm array size is ONLY this line — it must be ``0`` through ``NUM_SHARDS-1``.
+# ``export NUM_SHARDS=64`` does NOT change how many tasks Slurm runs; edit the next line or override on the CLI.
+#SBATCH --array=0-63
+#
+# Examples (run from repo, after ``cd`` to checkout):
+#   export MODEL=qwen25_7b_base NUM_SHARDS=64
 #   sbatch jobscript/score_proxy_train_shard_array.slurm
 #
-# Then merge (CPU is enough):
-#   sbatch --export=ALL,MODEL=${MODEL},NUM_SHARDS=32 jobscript/merge_proxy_train_shards.slurm
+# 32 shards instead: set ``#SBATCH --array=0-31`` below and ``NUM_SHARDS=32``, or override without editing the file:
+#   export MODEL=... NUM_SHARDS=64
+#   sbatch --array=0-$((NUM_SHARDS-1)) jobscript/score_proxy_train_shard_array.slurm
+#
+# Merge after all array tasks finish (match NUM_SHARDS):
+#   sbatch --export=ALL,MODEL=${MODEL},NUM_SHARDS=64 jobscript/merge_proxy_train_shards.slurm
+#
+# Rerun only failed shards (same MODEL / NUM_SHARDS as the original array):
+#   sbatch --array=7,19,22 jobscript/score_proxy_train_shard_array.slurm
+#   sbatch --export=ALL,MODEL=qwen25_7b_base,NUM_SHARDS=64 --array=10-15 jobscript/score_proxy_train_shard_array.slurm
+# Each task overwrites its own ``*_shard$(printf '%04d' TASK_ID)_of_$(printf '%04d' NUM_SHARDS).jsonl``.
 
 set -euo pipefail
 
@@ -41,6 +51,15 @@ export CACHE_DIR=/n/fs/vision-mix/rm4411/cache
 
 MODEL="${MODEL:?Set MODEL, e.g. export MODEL=qwen25_7b_base}"
 NUM_SHARDS="${NUM_SHARDS:?Set NUM_SHARDS, e.g. export NUM_SHARDS=32}"
+
+if [[ -n "${SLURM_ARRAY_TASK_MAX:-}" ]]; then
+  _expected_max=$((NUM_SHARDS - 1))
+  if (( SLURM_ARRAY_TASK_MAX != _expected_max )); then
+    echo "FATAL: NUM_SHARDS=${NUM_SHARDS} requires Slurm array indices 0..${_expected_max} (inclusive), but this job has SLURM_ARRAY_TASK_MAX=${SLURM_ARRAY_TASK_MAX}." >&2
+    echo "Fix: edit #SBATCH --array in this script to 0-${_expected_max}, or submit with: sbatch --array=0-${_expected_max} ..." >&2
+    exit 1
+  fi
+fi
 
 OUT_DIR="data/proxy_scored/${MODEL}/shards"
 mkdir -p "${OUT_DIR}"
