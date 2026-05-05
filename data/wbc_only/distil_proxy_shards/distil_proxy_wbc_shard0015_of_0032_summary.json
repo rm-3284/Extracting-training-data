@@ -46,5 +46,32 @@
         "p50": 0.0
       }
     }
+  },
+  "quantification": {
+    "n_rows": 382,
+    "n_wbc_exactly_zero": 382,
+    "frac_wbc_exactly_zero": 1.0,
+    "wbc_short_available": true,
+    "n_wbc_short_nll": 0,
+    "frac_wbc_short_nll": 0.0,
+    "n_wbc_short_and_exactly_zero": 0,
+    "n_wbc_exactly_zero_not_short": 382,
+    "frac_wbc_exactly_zero_not_short": 1.0,
+    "by_label": {
+      "0": {
+        "n": 164,
+        "n_wbc_exactly_zero": 164,
+        "frac_wbc_exactly_zero": 1.0,
+        "n_wbc_short_nll": 0,
+        "frac_wbc_short_nll": 0.0
+      },
+      "1": {
+        "n": 218,
+        "n_wbc_exactly_zero": 218,
+        "frac_wbc_exactly_zero": 1.0,
+        "n_wbc_short_nll": 0,
+        "frac_wbc_short_nll": 0.0
+      }
+    }
   }
 }

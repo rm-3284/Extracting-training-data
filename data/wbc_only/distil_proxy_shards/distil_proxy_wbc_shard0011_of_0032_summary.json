@@ -21,10 +21,10 @@
   "n_rows_written": 382,
   "distribution": {
     "n": 382,
-    "wbc_mean": 4.666312026952618e-07,
-    "wbc_std": 9.108277709000915e-06,
+    "wbc_mean": 0.0,
+    "wbc_std": 0.0,
     "wbc_min": 0.0,
-    "wbc_max": 0.00017825311942959,
+    "wbc_max": 0.0,
     "wbc_quantiles": {
       "p5": 0.0,
       "p25": 0.0,
@@ -35,8 +35,8 @@
     "by_label": {
       "0": {
         "n": 169,
-        "mean": 1.0547521859739055e-06,
-        "std": 1.3671150836751489e-05,
+        "mean": 0.0,
+        "std": 0.0,
         "p50": 0.0
       },
       "1": {
@@ -44,6 +44,33 @@
         "mean": 0.0,
         "std": 0.0,
         "p50": 0.0
+      }
+    }
+  },
+  "quantification": {
+    "n_rows": 382,
+    "n_wbc_exactly_zero": 382,
+    "frac_wbc_exactly_zero": 1.0,
+    "wbc_short_available": true,
+    "n_wbc_short_nll": 0,
+    "frac_wbc_short_nll": 0.0,
+    "n_wbc_short_and_exactly_zero": 0,
+    "n_wbc_exactly_zero_not_short": 382,
+    "frac_wbc_exactly_zero_not_short": 1.0,
+    "by_label": {
+      "0": {
+        "n": 169,
+        "n_wbc_exactly_zero": 169,
+        "frac_wbc_exactly_zero": 1.0,
+        "n_wbc_short_nll": 0,
+        "frac_wbc_short_nll": 0.0
+      },
+      "1": {
+        "n": 213,
+        "n_wbc_exactly_zero": 213,
+        "frac_wbc_exactly_zero": 1.0,
+        "n_wbc_short_nll": 0,
+        "frac_wbc_short_nll": 0.0
       }
     }
   }
