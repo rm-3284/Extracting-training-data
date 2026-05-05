@@ -3,7 +3,7 @@
   "output": "/n/fs/vision-mix/rm4411/Extracting-training-data/data/wbc_only/distil_proxy_shards/distil_proxy_wbc_shard0013_of_0032.jsonl",
   "active_model": "distil_qwen25_7b_instruct",
   "target_model": "alibaba-pai/DistilQwen2.5-7B-Instruct",
-  "reference_model": "Qwen/Qwen2.5-3B-Instruct",
+  "reference_model": "Qwen/Qwen2.5-0.5B-Instruct",
   "wbc_params_open_model_wbc": {
     "min_window": 2,
     "max_window": 40,

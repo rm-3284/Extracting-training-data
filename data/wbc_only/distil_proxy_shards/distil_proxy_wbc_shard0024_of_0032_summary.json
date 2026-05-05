@@ -3,7 +3,7 @@
   "output": "/n/fs/vision-mix/rm4411/Extracting-training-data/data/wbc_only/distil_proxy_shards/distil_proxy_wbc_shard0024_of_0032.jsonl",
   "active_model": "distil_qwen25_7b_instruct",
   "target_model": "alibaba-pai/DistilQwen2.5-7B-Instruct",
-  "reference_model": "Qwen/Qwen2.5-3B-Instruct",
+  "reference_model": "Qwen/Qwen2.5-0.5B-Instruct",
   "wbc_params_open_model_wbc": {
     "min_window": 2,
     "max_window": 40,
@@ -21,10 +21,10 @@
   "n_rows_written": 381,
   "distribution": {
     "n": 381,
-    "wbc_mean": 0.0,
-    "wbc_std": 0.0,
+    "wbc_mean": 7.647645442921033e-07,
+    "wbc_std": 1.4908005470833354e-05,
     "wbc_min": 0.0,
-    "wbc_max": 0.0,
+    "wbc_max": 0.0002913752913752914,
     "wbc_quantiles": {
       "p5": 0.0,
       "p25": 0.0,
@@ -35,8 +35,8 @@
     "by_label": {
       "0": {
         "n": 165,
-        "mean": 0.0,
-        "std": 0.0,
+        "mean": 1.7659108568199477e-06,
+        "std": 2.2614693216899232e-05,
         "p50": 0.0
       },
       "1": {
