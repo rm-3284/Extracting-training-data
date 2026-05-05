@@ -1,195 +1,145 @@
-## Prefix-Aware MI-Guided Decoding
+# Prefix-aware MI-guided decoding
 
-### Overview
-
-This module explores an inference-time intervention for reducing extractive or memorization-prone continuations in language models.
-
-Rather than modifying model weights or requiring access to the original training corpus, we use a **membership-inference-derived risk signal** during decoding. The core idea is to detect when the current prefix appears unusually training-like, then selectively downweight suspicious next-token continuations.
-
-This work is intended as an extension of the broader project on membership inference in LLMs.
+Inference-time decoding that downweights “suspicious” next tokens using an **infilling-based risk score** from [`../infilling_score/`](../infilling_score/). No weight updates and no training corpus at decode time. The same style of signal is often used **after** generation (membership-style scoring); here it is applied **during** generation.
 
 ---
 
-### Main Idea
+## How to run
 
-Most membership inference methods are used only for **post hoc detection**: given a completed sequence, estimate whether it is likely to have appeared in training.
+### Prerequisites
 
-Here, we repurpose that signal for **online control**.
+- **Python** with `torch`, `transformers`, and `datasets` installed (versions compatible with your GPU / CUDA setup).
+- **Hugging Face token** with access to the [MIMIR dataset](https://huggingface.co/datasets/iamgroot42/mimir) (`iamgroot42/mimir`). Request access on the dataset page if needed.
 
-At decoding step \(t\), given prefix \(x_{<t}\):
+### Environment
 
-1. compute a prefix-level membership/risk score using our MI method,
-2. convert that score into a bounded risk gate,
-3. use that gate to penalize suspicious candidate next tokens,
-4. decode from the modified distribution.
+From the **repository root** (`Extracting-training-data/`), set the token and use a venv if you have one:
 
-This yields a decoding procedure that is:
+```bash
+cd /path/to/Extracting-training-data
+export HF_TOKEN="hf_..."   # your Hugging Face token
+```
 
-- **prefix-conditioned**
-- **model-agnostic**
-- **training-data-free at inference**
-- **non-invasive** (no finetuning, no weight editing)
+The scripts add the repo root to `sys.path` so `infilling_score` imports resolve when you run from this folder; running as a module from the root also works.
 
----
+### 1. Preview MIMIR rows (no model load)
 
-### Motivation
+Prints prefix/suffix snippets for one example from the `arxiv` config:
 
-Existing inference-time mitigation methods each have limitations:
+```bash
+python memorization_detection/preview_data.py
+```
 
-- **n-gram / bloom-filter approaches** require access to training data and cannot catch near-matches,
-- **activation steering** requires careful layer selection and hidden-state manipulation,
-- **mechanistic localization** is informative but not directly deployable as a lightweight wrapper.
+Requires `HF_TOKEN`. Uses `huggingface_hub.login` and `datasets.load_dataset`.
 
-Our approach instead uses the model’s own behavior, through a membership-inference signal, to estimate when generation is entering a high-risk region.
+### 2. Full memorization / decoding demo (loads an LM)
 
----
+**Warning:** This downloads a large model (default **GPT-Neo 2.7B** via `ACTIVE_MODEL` in the script) and runs generation plus MIMIR scoring. Use a **GPU** for reasonable speed; on CPU the script still runs but uses `float32` and is slow.
 
-### Method
+```bash
+python memorization_detection/memorization_detection.py
+```
 
-Let the base language model define
+What the `__main__` block does, in order:
 
-\[
-p_\theta(v \mid x_{<t}) = \mathrm{softmax}(z_t)_v
-\]
+1. **NLL sanity check** on hardcoded member vs non-member prefix/suffix snippets.
+2. **Baseline** `model.generate` on a member-like prefix.
+3. **Risk-aware generation** in **fast** and **slow** modes (top-k resampling with infilling-based penalties).
+4. **`load_dataset("iamgroot42/mimir", "arxiv", ...)`** on split `ngram_7_0.2`.
+5. **`compare_infilling_scores`** — infilling scores on member vs non-member text for the first 20 rows.
+6. **`evaluate_fast_on_mimir`** — baseline vs fast decoder overlap / LCP vs true suffix for 10 examples.
 
-where \(z_{t,v}\) is the logit for candidate token \(v\).
+### Changing the model
 
-We compute a prefix-level membership score
+In `memorization_detection.py`, edit:
 
-\[
-s_{\mathrm{MI}}(x_{<t})
-\]
+```python
+ACTIVE_MODEL = "gpt_neo_2p7"  # e.g. "pythia_2p8", "pythia_70m", ...
+```
 
-using our infilling-based membership inference method (or a surrogate trained to approximate it).
+Keys are defined in `MODEL_CONFIGS` at the top of the file.
 
-We convert this to a bounded risk gate:
+### Importing from your own code
 
-\[
-r_t = \sigma\!\big(\alpha(s_{\mathrm{MI}}(x_{<t}) - \tau)\big)
-\]
-
-where:
-- \(\sigma\) is the sigmoid function,
-- \(\tau\) is a threshold,
-- \(\alpha\) controls how sharply risk activates.
-
-We then define a token-level suspiciousness term \(g_t(v)\), and modify the distribution as:
-
-\[
-\tilde z_{t,v} = z_{t,v} - \lambda r_t g_t(v)
-\]
-
-\[
-\tilde p(v \mid x_{<t}) = \mathrm{softmax}(\tilde z_t)_v
-\]
-
-Equivalently,
-
-\[
-\tilde p(v \mid x_{<t})
-\propto
-p_\theta(v \mid x_{<t})
-\exp(-\lambda r_t g_t(v))
-\]
-
-where \(\lambda\) controls intervention strength.
+The module **loads the model at import time** (`model, tokenizer = load_lm(MODEL_NAME)`), so importing `memorization_detection` will trigger a download/load. For library-style use, consider refactoring that side effect; for ad hoc runs, execute the file as above.
 
 ---
 
-### Interpreting the Components
+## Files in this directory
 
-- \(s_{\mathrm{MI}}(x_{<t})\): how membership-like or extraction-prone the current prefix appears
-- \(r_t\): a bounded risk gate derived from the MI score
-- \(g_t(v)\): how suspicious candidate token \(v\) is under the current prefix
-- \(\lambda\): how strongly risky continuations are penalized
+| File | Purpose |
+|------|---------|
+| [`memorization_detection.py`](memorization_detection.py) | LM load, suffix NLL, prefix infilling score, fast/slow risk-aware top-k sampling, baseline generation, MIMIR eval helpers. |
+| [`preview_data.py`](preview_data.py) | HF login + load MIMIR `arxiv` and print sample prefix/suffix text. |
 
-When \(r_t\) is low, decoding behaves almost like the original model.
-
-When \(r_t\) is high, suspicious continuations are downweighted more aggressively.
+Scoring calls [`../infilling_score/infilling_score.py`](../infilling_score/infilling_score.py).
 
 ---
 
-### Using the Infilling Score
+## What the implementation does
 
-Our current MI signal is based on an **infilling score**, which measures how sensitive a sequence is to local perturbations. Intuitively, memorization-prone sequences may exhibit brittle, unusually peaked continuation behavior: replacing a token can cause a sharp drop in local continuation consistency.
+1. **`suffix_nll(prefix, suffix)`** — Teacher-forces the suffix after the prefix; returns average and total NLL over suffix tokens (via `labels` masking the prefix).
 
-In the current prototype, the infilling score is computed offline on text examples. This score can be used in two ways:
+2. **`prefix_infilling_score(...)`** — Encodes the prefix, keeps the last `window` tokens, decodes to text, runs `infilling_score(model, tokenizer, text, ...)`.
 
-1. **Directly**, as a prefix-level risk signal during decoding, or
-2. **Indirectly**, by training a small surrogate model to predict the infilling score from the LM hidden state for faster online use.
+3. **Risk-aware next token**
+   - **Slow** (`risk_aware_next_token_slow`): For each of the top-k logits, append that token to the prefix text, compute a prefix infilling score, z-score across the k candidates, subtract `lambda_penalty * risk` from log-probs, softmax, sample. Cost scales with **k infilling evaluations per step**.
+   - **Fast** (`risk_aware_next_token_fast`): Every `risk_every` tokens, compute **one** cached infilling score on the current prefix. Penalty uses that scalar times a **normalized log-probability** proxy over the top-k candidates. Cost: **one infilling call every `risk_every` steps**.
 
-The second option is likely more practical for real-time decoding.
-
----
-
-### Implementation Plan
-
-#### Phase 1: Data and scoring
-- Load MIMIR member/nonmember examples
-- Split each text into prefix/suffix
-- Compute suffix NLL and/or infilling-based MI scores
-- Verify that member-like continuations are easier or more brittle than nonmember ones
-
-#### Phase 2: Prefix risk modeling
-- Compute a local prefix-level MI score
-- Optionally train a lightweight surrogate risk model on LM hidden states
-
-#### Phase 3: Decoding intervention
-- At each generation step:
-  - score the current prefix,
-  - compute the risk gate \(r_t\),
-  - reweight candidate next-token logits,
-  - sample from the modified distribution
-
-#### Phase 4: Evaluation
-Compare:
-- standard decoding
-- global temperature / penalty baselines
-- MI-guided prefix-aware decoding
+4. **`evaluate_fast_on_mimir`** — For MIMIR **member** strings, split into prefix/suffix by token count; compare baseline `generate` vs fast risk-aware continuation using token overlap and longest common prefix (LCP) with the true suffix.
 
 ---
 
-### Evaluation Goals
+## Method (notation without LaTeX delimiters)
 
-We want to test whether MI-guided decoding can:
+The base LM has next-token logits `z_t` and distribution
 
-- reduce exact or near-exact continuation of member-like sequences,
-- selectively activate on risky prefixes rather than everywhere,
-- preserve utility better than blunt global penalties.
+```
+p_theta(v | x_<t) = softmax(z_t)[v]
+```
 
-Potential metrics:
-- suffix negative log-likelihood,
-- exact continuation length,
-- overlap with target suffix,
-- change in generation quality / fluency.
+A prefix-level score `s_MI(x_<t)` (here: infilling score) can be turned into a bounded gate
 
----
+```
+r_t = sigmoid( alpha * (s_MI(x_<t) - tau) )
+```
 
-### Claims and Scope
+with threshold `tau` and sharpness `alpha`. With a per-token term `g_t(v)` (suspiciousness of candidate `v`),
 
-This module does **not** claim to perfectly detect memorization or fully solve extraction.
+```
+z'_t[v] = z_t[v] - lambda * r_t * g_t(v)
+p'(v | x_<t) = softmax(z'_t)_v
+```
 
-Instead, it tests the following hypothesis:
-
-> Membership-inference signals can be repurposed as prefix-level extraction-risk proxies, enabling lightweight and selective decoding-time mitigation.
-
----
-
-### Current Status
-
-- [x] Load MIMIR data
-- [x] Compute member vs nonmember suffix NLL on examples
-- [x] Inspect infilling-based MI implementation
-- [ ] Define prefix-local MI risk score
-- [ ] Implement logit reweighting
-- [ ] Compare against baseline decoding
+equivalently `p' proportional to p_theta * exp(-lambda * r_t * g_t(v))`. In code, **lambda** is `lambda_penalty`; **g** is infilling-based per candidate (**slow**) or normalized log-prob (**fast**). The idealized sigmoid gate is descriptive; the **fast** path uses a cached scalar risk and a cheap token proxy.
 
 ---
 
-### Practical Notes
+## Motivation (short)
 
-This approach differs from prior work in three ways:
+- N-gram / Bloom-style filters need training data or huge indexes.
+- Activation steering needs layer picks and hidden-state edits.
+- This path uses **decode-time** behavioral scores (infilling) only.
 
-1. it does **not** require access to the training corpus at inference time,
-2. it does **not** modify weights or hidden states directly,
-3. it uses **membership inference as a control signal**, rather than only as an offline audit tool.
+---
+
+## Roadmap vs code
+
+| Phase | In code |
+|-------|---------|
+| Data & scoring (MIMIR, NLL, infilling) | Partially: NLL, infilling, MIMIR in `__main__` |
+| Surrogate risk on hidden states | Not implemented |
+| Logit reweighting | Yes: fast / slow decoders |
+| Eval (overlap, LCP) | Yes: `evaluate_fast_on_mimir` |
+
+---
+
+## Scope
+
+This does **not** claim perfect memorization detection. The hypothesis is that MI-style / infilling signals can act as **prefix-level risk proxies** for selective decoding-time mitigation.
+
+---
+
+## Relation to the rest of the repo
+
+Same broad theme as membership-inference work elsewhere in the project, but applied **while** generating text, not only to score finished outputs.
