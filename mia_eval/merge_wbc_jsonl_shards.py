@@ -10,6 +10,10 @@ Example::
     --output data/wbc_only/distil_proxy_train_wbc_merged.jsonl \\
     --expected-rows 12200 \\
     --summary-json data/wbc_only/distil_proxy_train_wbc_merged_summary.json
+
+Merged ``--summary-json`` includes ``quantification``. If every row has ``wbc_short``
+(from scoring with ``--per-row-quant``), the merge aggregates short-nll counts;
+otherwise only exact-zero stats are available. ``--quant-log-json`` writes just that block.
 """
 
 from __future__ import annotations
@@ -27,6 +31,8 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+from mia_eval.wbc_quantification import wbc_quantification_summary
 
 
 def _paths_from_glob(pattern: str) -> List[Path]:
@@ -94,6 +100,12 @@ def main() -> None:
     ap.add_argument("--expected-rows", type=int, default=0, help="If >0, require exactly this many rows.")
     ap.add_argument("--strip-proxy-row-index", action="store_true")
     ap.add_argument("--summary-json", type=str, default="", help="Write merged distribution JSON.")
+    ap.add_argument(
+        "--quant-log-json",
+        type=str,
+        default="",
+        help="If set, write only the merged quantification block to this JSON file.",
+    )
     args = ap.parse_args()
 
     if bool(args.glob) == bool(args.inputs):
@@ -137,23 +149,48 @@ def main() -> None:
         )
     )
 
-    if str(args.summary_json).strip():
+    want_summ = bool(str(args.summary_json).strip())
+    want_quant_only = bool(str(args.quant_log_json).strip())
+    if want_summ or want_quant_only:
         wbc = np.array([float(r["wbc"]) for r in merged], dtype=np.float64)
-        labels: Optional[np.ndarray] = None
+        labels_m: Optional[np.ndarray] = None
         if all("label" in r for r in merged):
             lab = [int(r["label"]) for r in merged]
             if all(x in (0, 1) for x in lab):
-                labels = np.asarray(lab, dtype=np.int64)
-        summ = {
-            "merged_output": str(out_path.resolve()),
-            "n_rows": n,
-            "distribution": _summarize(wbc, labels),
-        }
-        sp = Path(args.summary_json)
-        sp.parent.mkdir(parents=True, exist_ok=True)
-        with open(sp, "w", encoding="utf-8") as f:
-            json.dump(summ, f, indent=2, ensure_ascii=False)
-        print(f"Wrote {sp}", file=sys.stderr)
+                labels_m = np.asarray(lab, dtype=np.int64)
+        short = None
+        if merged and all("wbc_short" in r for r in merged):
+            short = np.asarray([bool(r["wbc_short"]) for r in merged], dtype=bool)
+        quant_block = wbc_quantification_summary(wbc, labels_m, short)
+        if want_summ:
+            summ = {
+                "merged_output": str(out_path.resolve()),
+                "n_rows": n,
+                "distribution": _summarize(wbc, labels_m),
+                "quantification": quant_block,
+            }
+            sp = Path(args.summary_json)
+            sp.parent.mkdir(parents=True, exist_ok=True)
+            with open(sp, "w", encoding="utf-8") as f:
+                json.dump(summ, f, indent=2, ensure_ascii=False)
+            print(f"Wrote {sp}", file=sys.stderr)
+        if want_quant_only:
+            qp = Path(args.quant_log_json)
+            qp.parent.mkdir(parents=True, exist_ok=True)
+            with open(qp, "w", encoding="utf-8") as f:
+                json.dump(quant_block, f, indent=2, ensure_ascii=False)
+            print(f"Wrote quantification log {qp}", file=sys.stderr)
+        qparts = [
+            f"n_wbc_zero={quant_block['n_wbc_exactly_zero']}",
+            f"frac_zero={quant_block['frac_wbc_exactly_zero']:.6g}",
+        ]
+        if quant_block.get("wbc_short_available"):
+            qparts = [
+                f"n_short_nll={quant_block['n_wbc_short_nll']}",
+                f"frac_short={quant_block['frac_wbc_short_nll']:.6g}",
+                f"n_zero_not_short={quant_block['n_wbc_exactly_zero_not_short']}",
+            ] + qparts
+        print("[quant] " + " ".join(qparts), file=sys.stderr, flush=True)
 
 
 if __name__ == "__main__":

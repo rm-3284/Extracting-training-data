@@ -15,6 +15,11 @@ Example (full ``qwen_memtrace_proxy_train.jsonl`` on one GPU)::
     --batch-size 4 \\
     --summary-json data/wbc_only/distil_proxy_train_wbc_summary.json
 
+Each shard summary includes a ``quantification`` block (exact zeros vs ``wbc_short`` /
+``n < 2`` NLL path). Use ``--per-row-quant`` to store ``wbc_input_tokens``, ``wbc_nll_len``,
+and ``wbc_short`` on every row (needed for short-nll breakdown when merging shards).
+``--quant-log-json`` writes only that block to a small JSON file.
+
 Parallel shards (same pattern as ``score_proxy_jsonl``)::
 
   python -m mia_eval.score_wbc_jsonl ... --num-shards 8 --shard-id 0 --output .../shard0000.jsonl
@@ -38,6 +43,7 @@ from mia_eval.config_loader import active_model_bundle, apply_dot_overrides, loa
 from mia_eval.mia_gt_pipeline import _wbc_params_merge
 from mia_eval.model_utils import load_causal_lm, pick_device, torch_dtype_from_str
 from mia_eval.scoring_wbc import score_texts as wbc_scores
+from mia_eval.wbc_quantification import wbc_quantification_summary
 
 
 def _iter_nonempty_jsonl_lines(path: Path) -> Iterator[Tuple[int, Dict[str, Any]]]:
@@ -134,6 +140,17 @@ def main() -> None:
         default="",
         help="Write distribution summary (needs labels 0/1 on all rows for by_label).",
     )
+    ap.add_argument(
+        "--per-row-quant",
+        action="store_true",
+        help="Add wbc_input_tokens, wbc_nll_len, wbc_short to each output row (larger JSONL).",
+    )
+    ap.add_argument(
+        "--quant-log-json",
+        type=str,
+        default="",
+        help="If set, write only the quantification block (zeros vs short-nll) to this JSON file.",
+    )
     args = ap.parse_args()
 
     inp = Path(args.input)
@@ -193,6 +210,7 @@ def main() -> None:
 
     wbc_all: List[float] = []
     lab_all: List[int] = []
+    diag_all: List[Dict[str, Any]] = []
 
     logical = 0
     written = 0
@@ -210,6 +228,7 @@ def main() -> None:
                 raise ValueError("Empty text in chunk after strip.")
             nloc = len(texts)
             scores = np.empty(nloc, dtype=np.float64)
+            chunk_diag: List[Dict[str, Any]] = []
             for i in range(0, nloc, bs):
                 j = min(i + bs, nloc)
                 scores[i:j] = wbc_scores(
@@ -220,7 +239,9 @@ def main() -> None:
                     device,
                     wbc_params,
                     max_length=max_len,
+                    diag_out=chunk_diag,
                 )
+            diag_all.extend(chunk_diag)
             for k, r in enumerate(buf_rows):
                 gix = buf_logical[k]
                 w = float(scores[k])
@@ -244,6 +265,11 @@ def main() -> None:
                         pass
                 if r.get("source") is not None:
                     doc["source"] = r.get("source")
+                if args.per_row_quant and k < len(chunk_diag):
+                    q = chunk_diag[k]
+                    doc["wbc_input_tokens"] = int(q["wbc_input_tokens"])
+                    doc["wbc_nll_len"] = int(q["wbc_nll_len"])
+                    doc["wbc_short"] = bool(q["wbc_short"])
                 out_f.write(json.dumps(doc, ensure_ascii=False) + "\n")
                 written += 1
             buf_rows.clear()
@@ -274,6 +300,17 @@ def main() -> None:
     if lab_all and all(x in (0, 1) for x in lab_all):
         labels_arr = np.asarray(lab_all, dtype=np.int64)
 
+    short_arr: Optional[np.ndarray] = None
+    if len(diag_all) == int(wbc_arr.size):
+        short_arr = np.asarray([bool(d["wbc_short"]) for d in diag_all], dtype=bool)
+    elif diag_all:
+        print(
+            "[quant] warning: diag length mismatch; omitting short-nll breakdown",
+            file=sys.stderr,
+            flush=True,
+        )
+    quant_block = wbc_quantification_summary(wbc_arr, labels_arr, short_arr)
+
     summary = {
         "input": str(inp.resolve()),
         "output": str(out_path.resolve()),
@@ -285,8 +322,20 @@ def main() -> None:
         "shard": {"num_shards": ns, "shard_id": sid, "row_range": [row_start, row_end]},
         "n_rows_written": written,
         "distribution": _summarize(wbc_arr, labels_arr),
+        "quantification": quant_block,
     }
     print(json.dumps(summary, indent=2, ensure_ascii=False))
+    qparts = [
+        f"n_wbc_zero={quant_block['n_wbc_exactly_zero']}",
+        f"frac_zero={quant_block['frac_wbc_exactly_zero']:.6g}",
+    ]
+    if quant_block.get("wbc_short_available"):
+        qparts = [
+            f"n_short_nll={quant_block['n_wbc_short_nll']}",
+            f"frac_short={quant_block['frac_wbc_short_nll']:.6g}",
+            f"n_zero_not_short={quant_block['n_wbc_exactly_zero_not_short']}",
+        ] + qparts
+    print("[quant] " + " ".join(qparts), file=sys.stderr, flush=True)
 
     if str(args.summary_json).strip():
         sp = Path(args.summary_json)
@@ -294,6 +343,13 @@ def main() -> None:
         with open(sp, "w", encoding="utf-8") as f:
             json.dump(summary, f, indent=2, ensure_ascii=False)
         print(f"Wrote {sp}", file=sys.stderr)
+
+    if str(args.quant_log_json).strip():
+        qp = Path(args.quant_log_json)
+        qp.parent.mkdir(parents=True, exist_ok=True)
+        with open(qp, "w", encoding="utf-8") as f:
+            json.dump(quant_block, f, indent=2, ensure_ascii=False)
+        print(f"Wrote quantification log {qp}", file=sys.stderr)
 
 
 if __name__ == "__main__":
