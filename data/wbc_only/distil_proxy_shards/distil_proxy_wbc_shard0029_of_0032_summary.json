@@ -1,0 +1,50 @@
+{
+  "input": "/n/fs/vision-mix/rm4411/Extracting-training-data/data/qwen_memtrace_proxy_train.jsonl",
+  "output": "/n/fs/vision-mix/rm4411/Extracting-training-data/data/wbc_only/distil_proxy_shards/distil_proxy_wbc_shard0029_of_0032.jsonl",
+  "active_model": "distil_qwen25_7b_instruct",
+  "target_model": "alibaba-pai/DistilQwen2.5-7B-Instruct",
+  "reference_model": "Qwen/Qwen2.5-3B-Instruct",
+  "wbc_params_open_model_wbc": {
+    "min_window": 2,
+    "max_window": 40,
+    "num_windows": 12
+  },
+  "n_rows_file_nonempty": 12200,
+  "shard": {
+    "num_shards": 32,
+    "shard_id": 29,
+    "row_range": [
+      11056,
+      11437
+    ]
+  },
+  "n_rows_written": 381,
+  "distribution": {
+    "n": 381,
+    "wbc_mean": 0.0,
+    "wbc_std": 0.0,
+    "wbc_min": 0.0,
+    "wbc_max": 0.0,
+    "wbc_quantiles": {
+      "p5": 0.0,
+      "p25": 0.0,
+      "p50": 0.0,
+      "p75": 0.0,
+      "p95": 0.0
+    },
+    "by_label": {
+      "0": {
+        "n": 179,
+        "mean": 0.0,
+        "std": 0.0,
+        "p50": 0.0
+      },
+      "1": {
+        "n": 202,
+        "mean": 0.0,
+        "std": 0.0,
+        "p50": 0.0
+      }
+    }
+  }
+}
