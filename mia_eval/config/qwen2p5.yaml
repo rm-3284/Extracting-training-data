@@ -1,6 +1,6 @@
 # Merge over defaults:  python -m mia_eval.score_sequence --config mia_eval/config/defaults.yaml --experiment mia_eval/config/qwen2p5.yaml --preset qwen25_7b_base --text "Hello"
 #
-# WBC references are same-family smaller checkpoints (1.5B–3B) where available.
+# WBC references are same-family smaller checkpoints (0.5B–3B) where available.
 
 experiment:
   max_length_tokens: 512
@@ -34,6 +34,13 @@ models:
     torch_dtype: bfloat16
 
   distil_qwen25_7b_instruct:
+    target_model: alibaba-pai/DistilQwen2.5-7B-Instruct
+    reference_model: Qwen/Qwen2.5-0.5B-Instruct
+    tokenizer: alibaba-pai/DistilQwen2.5-7B-Instruct
+    torch_dtype: bfloat16
+
+  # Same target as distil_qwen25_7b_instruct; use for A/B vs 0.5B WBC reference.
+  distil_qwen25_7b_instruct_wbc_ref_3b:
     target_model: alibaba-pai/DistilQwen2.5-7B-Instruct
     reference_model: Qwen/Qwen2.5-3B-Instruct
     tokenizer: alibaba-pai/DistilQwen2.5-7B-Instruct
