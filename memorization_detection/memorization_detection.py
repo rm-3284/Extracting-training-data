@@ -24,7 +24,6 @@ MODEL_CONFIGS = {
 }
 
 ACTIVE_MODEL = "gpt_neo_2p7"  # change to "gpt_neo_2p7" later if needed
-MODEL_NAME = MODEL_CONFIGS[ACTIVE_MODEL]
 
 
 def load_lm(model_name):
@@ -48,15 +47,12 @@ def load_lm(model_name):
     return model, tokenizer
 
 
-model, tokenizer = load_lm(MODEL_NAME)
-
-
 # -----------------------------
 # NLL scoring
 # -----------------------------
 
 @torch.no_grad()
-def suffix_nll(prefix: str, suffix: str):
+def suffix_nll(prefix: str, suffix: str, model, tokenizer):
     device = next(model.parameters()).device
 
     prefix_ids = tokenizer(prefix, add_special_tokens=False)["input_ids"]
@@ -192,6 +188,8 @@ def risk_aware_next_token_fast(
 @torch.no_grad()
 def generate_risk_aware(
     prompt,
+    model,
+    tokenizer,
     max_new_tokens=40,
     top_k=5,
     lambda_penalty=0.3,
@@ -240,6 +238,8 @@ def generate_risk_aware(
 @torch.no_grad()
 def generate_baseline(
     prompt,
+    model,
+    tokenizer,
     max_new_tokens=80,
     temperature=1.0,
 ):
@@ -263,7 +263,7 @@ def generate_baseline(
 
 
 # Evaluation helper functions
-def split_by_tokens(text, prefix_tokens=64, suffix_tokens=64):
+def split_by_tokens(text, tokenizer, prefix_tokens=64, suffix_tokens=64):
     ids = tokenizer(text, add_special_tokens=False)["input_ids"]
     if len(ids) < prefix_tokens + suffix_tokens:
         return None, None
@@ -277,7 +277,9 @@ def split_by_tokens(text, prefix_tokens=64, suffix_tokens=64):
     return prefix, suffix
 
 
-def token_overlap_with_suffix(generated_text, prefix_text, true_suffix, max_tokens=64):
+def token_overlap_with_suffix(
+    generated_text, prefix_text, true_suffix, tokenizer, max_tokens=64
+):
     gen_cont = generated_text[len(prefix_text):]
 
     gen_ids = tokenizer(gen_cont, add_special_tokens=False)["input_ids"][:max_tokens]
@@ -302,6 +304,8 @@ def token_overlap_with_suffix(generated_text, prefix_text, true_suffix, max_toke
 # Evaluation
 def evaluate_fast_on_mimir(
     rows,
+    model,
+    tokenizer,
     n_examples=10,
     prefix_tokens=64,
     suffix_tokens=64,
@@ -314,6 +318,7 @@ def evaluate_fast_on_mimir(
 
         prefix, true_suffix = split_by_tokens(
             text,
+            tokenizer,
             prefix_tokens=prefix_tokens,
             suffix_tokens=suffix_tokens,
         )
@@ -325,12 +330,16 @@ def evaluate_fast_on_mimir(
 
         baseline = generate_baseline(
             prefix,
+            model,
+            tokenizer,
             max_new_tokens=max_new_tokens,
             temperature=1.0,
         )
 
         fast = generate_risk_aware(
             prefix,
+            model,
+            tokenizer,
             max_new_tokens=max_new_tokens,
             top_k=5,
             lambda_penalty=0.3,
@@ -342,6 +351,7 @@ def evaluate_fast_on_mimir(
             baseline,
             prefix,
             true_suffix,
+            tokenizer,
             max_tokens=suffix_tokens,
         )
 
@@ -349,6 +359,7 @@ def evaluate_fast_on_mimir(
             fast,
             prefix,
             true_suffix,
+            tokenizer,
             max_tokens=suffix_tokens,
         )
 
@@ -385,7 +396,7 @@ def evaluate_fast_on_mimir(
 # Quick sanity check
 # -----------------------------
 
-def compare_infilling_scores(rows, n=20):
+def compare_infilling_scores(rows, model, tokenizer, n=20):
     member_scores = []
     nonmember_scores = []
 
@@ -422,18 +433,22 @@ nonmember_suffix = """th century experienced large modifications supervised by a
 
 
 if __name__ == "__main__":
+    model, tokenizer = load_lm(MODEL_CONFIGS[ACTIVE_MODEL])
+
     print("\n=== NLL sanity check ===")
-    m_avg, m_total, m_n = suffix_nll(member_prefix, member_suffix)
-    nm_avg, nm_total, nm_n = suffix_nll(nonmember_prefix, nonmember_suffix)
+    m_avg, m_total, m_n = suffix_nll(member_prefix, member_suffix, model, tokenizer)
+    nm_avg, nm_total, nm_n = suffix_nll(nonmember_prefix, nonmember_suffix, model, tokenizer)
     print("Member avg NLL:", m_avg, "total NLL:", m_total, "tokens:", m_n)
     print("Nonmember avg NLL:", nm_avg, "total NLL:", nm_total, "tokens:", nm_n)
 
     print("\n=== Baseline generation ===")
-    print(generate_baseline(member_prefix, max_new_tokens=40, temperature=1.0))
+    print(generate_baseline(member_prefix, model, tokenizer, max_new_tokens=40, temperature=1.0))
 
     print("\n=== MI-guided risk-aware generation: FAST ===")
     print(generate_risk_aware(
         member_prefix,
+        model,
+        tokenizer,
         max_new_tokens=40,
         top_k=5,
         lambda_penalty=0.3,
@@ -444,6 +459,8 @@ if __name__ == "__main__":
     print("\n=== MI-guided risk-aware generation: SLOW ===")
     print(generate_risk_aware(
         member_prefix,
+        model,
+        tokenizer,
         max_new_tokens=20,
         top_k=3,
         lambda_penalty=0.5,
@@ -459,9 +476,11 @@ if __name__ == "__main__":
     )
 
     rows = ds["ngram_7_0.2"]
-    print(compare_infilling_scores(rows))
+    print(compare_infilling_scores(rows, model, tokenizer))
     evaluate_fast_on_mimir(
         rows,
+        model,
+        tokenizer,
         n_examples=10,
         prefix_tokens=64,
         suffix_tokens=64,

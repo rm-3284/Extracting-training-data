@@ -49,6 +49,18 @@ What the `__main__` block does, in order:
 5. **`compare_infilling_scores`** — infilling scores on member vs non-member text for the first 20 rows.
 6. **`evaluate_fast_on_mimir`** — baseline vs fast decoder overlap / LCP vs true suffix for 10 examples.
 
+### 3. Multi-model benchmark (baseline + fast + slow)
+
+[`run_mimir_decoding_benchmark.py`](run_mimir_decoding_benchmark.py) loads **three open models in sequence** (default: `gpt_neo_2p7`, `pythia_2p8`, `pythia_1p4`), evaluates **baseline**, **fast**, and **slow** on the first **N** MIMIR member rows, and prints mean token overlap and LCP vs the held-out suffix. Writes JSON if you pass `--output`.
+
+```bash
+python memorization_detection/run_mimir_decoding_benchmark.py --n-examples 50 --output bench.json
+```
+
+**Slow mode** runs several infilling passes **per generated token**; the default `--slow-max-new-tokens 24` keeps runs tractable. Match lengths across modes with e.g. `--max-new-tokens-baseline 32 --max-new-tokens-fast 32 --slow-max-new-tokens 32` when you can afford it. Skip slow entirely: `--skip-slow`.
+
+Other useful flags: `--models gpt_neo_2p7 pythia_1p4`, `--seed 0`, `--verbose`.
+
 ### Changing the model
 
 In `memorization_detection.py`, edit:
@@ -59,9 +71,9 @@ ACTIVE_MODEL = "gpt_neo_2p7"  # e.g. "pythia_2p8", "pythia_70m", ...
 
 Keys are defined in `MODEL_CONFIGS` at the top of the file.
 
-### Importing from your own code
+### Using helpers from another script
 
-The module **loads the model at import time** (`model, tokenizer = load_lm(MODEL_NAME)`), so importing `memorization_detection` will trigger a download/load. For library-style use, consider refactoring that side effect; for ad hoc runs, execute the file as above.
+Call `load_lm(MODEL_CONFIGS[key])` once, then pass `model` and `tokenizer` into `suffix_nll`, `generate_baseline`, `generate_risk_aware`, `split_by_tokens`, `token_overlap_with_suffix`, and `evaluate_fast_on_mimir`. The benchmark script loads `memorization_detection.py` via `importlib` so a normal `import` does not pull in a model.
 
 ---
 
@@ -70,6 +82,7 @@ The module **loads the model at import time** (`model, tokenizer = load_lm(MODEL
 | File | Purpose |
 |------|---------|
 | [`memorization_detection.py`](memorization_detection.py) | LM load, suffix NLL, prefix infilling score, fast/slow risk-aware top-k sampling, baseline generation, MIMIR eval helpers. |
+| [`run_mimir_decoding_benchmark.py`](run_mimir_decoding_benchmark.py) | CLI: three default open LMs, more examples, baseline vs fast vs slow, optional JSON. |
 | [`preview_data.py`](preview_data.py) | HF login + load MIMIR `arxiv` and print sample prefix/suffix text. |
 
 Scoring calls [`../infilling_score/infilling_score.py`](../infilling_score/infilling_score.py).
@@ -78,15 +91,15 @@ Scoring calls [`../infilling_score/infilling_score.py`](../infilling_score/infil
 
 ## What the implementation does
 
-1. **`suffix_nll(prefix, suffix)`** — Teacher-forces the suffix after the prefix; returns average and total NLL over suffix tokens (via `labels` masking the prefix).
+1. **`suffix_nll(prefix, suffix, model, tokenizer)`** — Teacher-forces the suffix after the prefix; returns average and total NLL over suffix tokens (via `labels` masking the prefix).
 
-2. **`prefix_infilling_score(...)`** — Encodes the prefix, keeps the last `window` tokens, decodes to text, runs `infilling_score(model, tokenizer, text, ...)`.
+2. **`prefix_infilling_score(model, tokenizer, ...)`** — Encodes the prefix, keeps the last `window` tokens, decodes to text, runs `infilling_score(model, tokenizer, text, ...)`.
 
 3. **Risk-aware next token**
    - **Slow** (`risk_aware_next_token_slow`): For each of the top-k logits, append that token to the prefix text, compute a prefix infilling score, z-score across the k candidates, subtract `lambda_penalty * risk` from log-probs, softmax, sample. Cost scales with **k infilling evaluations per step**.
    - **Fast** (`risk_aware_next_token_fast`): Every `risk_every` tokens, compute **one** cached infilling score on the current prefix. Penalty uses that scalar times a **normalized log-probability** proxy over the top-k candidates. Cost: **one infilling call every `risk_every` steps**.
 
-4. **`evaluate_fast_on_mimir`** — For MIMIR **member** strings, split into prefix/suffix by token count; compare baseline `generate` vs fast risk-aware continuation using token overlap and longest common prefix (LCP) with the true suffix.
+4. **`evaluate_fast_on_mimir(rows, model, tokenizer, ...)`** — For MIMIR **member** strings, split into prefix/suffix by token count; compare baseline `generate` vs fast risk-aware continuation using token overlap and longest common prefix (LCP) with the true suffix.
 
 ---
 
