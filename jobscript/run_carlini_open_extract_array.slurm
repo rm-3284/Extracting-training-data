@@ -27,7 +27,9 @@
 #   MANIFEST_PATH             (default: mia_eval_outputs/carlini_extract/manifest.json)
 #   CONDA_ENV
 #   INSTALL_OLMO_DEPS         (default: 1; auto-install/check hf_olmo for OLMo runs)
-#   INSTALL_DCLM_DEPS         (default: 1; install ``open_lm`` so DCLM ``openlm`` checkpoints register with Transformers)
+#
+# DCLM tasks expect ``open_lm`` already in the conda env (``import open_lm.hf`` registers ``openlm`` with
+# Transformers). One-time install: see ``mia_eval/openlm_hf_loader.py``.
 #
 # Edit #SBATCH --chdir= to your clone if different.
 
@@ -107,35 +109,8 @@ else:
 PY
 fi
 
-# DCLM: ``model_type=openlm`` is wired via ``mlfoundations/open_lm`` (registers OpenLMForCausalLM), not stock Transformers alone.
-if [[ "${RUN_KEY}" == dclm* ]] && [[ "${INSTALL_DCLM_DEPS:-1}" == "1" ]]; then
-  python - <<'PY'
-import importlib.util
-import subprocess
-import sys
-
-py = sys.executable
-if importlib.util.find_spec("open_lm") is None or importlib.util.find_spec("open_lm.hf") is None:
-    print("Installing open_lm (DCLM / OpenLM HF integration)")
-    subprocess.check_call(
-        [
-            py,
-            "-m",
-            "pip",
-            "install",
-            "-U",
-            "git+https://github.com/mlfoundations/open_lm.git",
-            "transformers",
-            "accelerate",
-            "sentencepiece",
-        ]
-    )
-else:
-    print("open_lm already available; refreshing transformers stack")
-    subprocess.check_call(
-        [py, "-m", "pip", "install", "-U", "transformers", "accelerate", "sentencepiece"]
-    )
-PY
+if [[ "${RUN_KEY}" == dclm* ]]; then
+  python -c "import open_lm.hf; print('open_lm.hf OK')"
 fi
 
 python -m mia_eval.run_carlini_extraction_batch \
