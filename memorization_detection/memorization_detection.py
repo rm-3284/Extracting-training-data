@@ -109,6 +109,32 @@ def _minmax01_1d(x: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
     return (x - lo) / (span + eps)
 
 
+def _safe_float(x, default: float = 0.0) -> float:
+    """Return finite float value or default."""
+    try:
+        v = float(x)
+    except (TypeError, ValueError):
+        return default
+    if not torch.isfinite(torch.tensor(v)):
+        return default
+    return v
+
+
+def _safe_probs_from_log_probs(log_probs: torch.Tensor) -> torch.Tensor:
+    """
+    Build a numerically safe probability vector from log-probs.
+    Guarantees finite non-negative probs that sum to 1.
+    """
+    safe_log_probs = torch.nan_to_num(log_probs, nan=-1e4, posinf=1e4, neginf=-1e4)
+    probs = F.softmax(safe_log_probs, dim=-1)
+    probs = torch.nan_to_num(probs, nan=0.0, posinf=0.0, neginf=0.0)
+    probs = torch.clamp(probs, min=0.0)
+    total = probs.sum()
+    if not torch.isfinite(total) or total <= 0:
+        return torch.full_like(probs, 1.0 / probs.numel())
+    return probs / total
+
+
 # Version 1: slow — candidate infilling scores with absolute [0,1] weights (not z-scored),
 # scaled by a sigmoid gate from prefix-only infilling (intervention only when prefix looks risky).
 # Cost: top_k + 1 infilling calls per generated token.
@@ -117,6 +143,7 @@ def risk_aware_next_token_slow(
     model,
     tokenizer,
     input_ids,
+    attention_mask,
     top_k=DEFAULT_DECODE_TOP_K,
     lambda_penalty=0.5,
     temperature=1.0,
@@ -125,7 +152,7 @@ def risk_aware_next_token_slow(
     k=0.1,
     gate_gamma=DEFAULT_GATE_GAMMA,
 ):
-    outputs = model(input_ids=input_ids)
+    outputs = model(input_ids=input_ids, attention_mask=attention_mask)
     logits = outputs.logits[:, -1, :]
 
     base_log_probs = F.log_softmax(logits / temperature, dim=-1)
@@ -136,6 +163,7 @@ def risk_aware_next_token_slow(
     prefix_risk = prefix_infilling_score(
         model, tokenizer, prefix_text, window=window, m=m, k=k
     )
+    prefix_risk = _safe_float(prefix_risk, default=0.0)
     gate = torch.sigmoid(
         torch.tensor(
             gate_gamma * prefix_risk,
@@ -153,13 +181,14 @@ def risk_aware_next_token_slow(
         risk = prefix_infilling_score(
             model, tokenizer, candidate_text, window=window, m=m, k=k
         )
-        risks.append(risk)
+        risks.append(_safe_float(risk, default=prefix_risk))
 
     risks = torch.tensor(risks, device=input_ids.device, dtype=topk_log_probs.dtype)
+    risks = torch.nan_to_num(risks, nan=prefix_risk, posinf=prefix_risk, neginf=0.0)
     g = _minmax01_1d(risks)
 
     adjusted_log_probs = topk_log_probs[0] - lambda_penalty * gate * g
-    adjusted_probs = F.softmax(adjusted_log_probs, dim=-1)
+    adjusted_probs = _safe_probs_from_log_probs(adjusted_log_probs)
 
     sampled_index = torch.multinomial(adjusted_probs, num_samples=1).item()
     return topk_ids[0, sampled_index].item()
@@ -174,6 +203,7 @@ def risk_aware_next_token_fast(
     model,
     tokenizer,
     input_ids,
+    attention_mask,
     top_k=DEFAULT_DECODE_TOP_K,
     lambda_penalty=0.3,
     temperature=1.0,
@@ -183,7 +213,7 @@ def risk_aware_next_token_fast(
     risk_every=1,
     gate_gamma=DEFAULT_GATE_GAMMA,
 ):
-    outputs = model(input_ids=input_ids)
+    outputs = model(input_ids=input_ids, attention_mask=attention_mask)
     logits = outputs.logits[:, -1, :]
 
     base_log_probs = F.log_softmax(logits / temperature, dim=-1)
@@ -196,9 +226,10 @@ def risk_aware_next_token_fast(
         RISK_CACHE["risk"] = prefix_infilling_score(
             model, tokenizer, prefix_text, window=window, m=m, k=k
         )
+        RISK_CACHE["risk"] = _safe_float(RISK_CACHE["risk"], default=0.0)
         RISK_CACHE["step"] = step
 
-    prefix_risk = RISK_CACHE["risk"]
+    prefix_risk = _safe_float(RISK_CACHE["risk"], default=0.0)
     gate = torch.sigmoid(
         torch.tensor(
             gate_gamma * prefix_risk,
@@ -212,7 +243,7 @@ def risk_aware_next_token_fast(
     token_danger = _minmax01_1d(lp)
 
     adjusted_log_probs = lp - lambda_penalty * gate * token_danger
-    adjusted_probs = F.softmax(adjusted_log_probs, dim=-1)
+    adjusted_probs = _safe_probs_from_log_probs(adjusted_log_probs)
 
     sampled_index = torch.multinomial(adjusted_probs, num_samples=1).item()
     return topk_ids[0, sampled_index].item()
@@ -241,6 +272,7 @@ def generate_risk_aware(
         return_tensors="pt",
         add_special_tokens=False,
     ).input_ids.to(device)
+    attention_mask = torch.ones_like(input_ids, device=device)
 
     for _ in range(max_new_tokens):
         if mode == "slow":
@@ -248,6 +280,7 @@ def generate_risk_aware(
                 model,
                 tokenizer,
                 input_ids,
+                attention_mask,
                 top_k=top_k,
                 lambda_penalty=lambda_penalty,
                 temperature=temperature,
@@ -258,6 +291,7 @@ def generate_risk_aware(
                 model,
                 tokenizer,
                 input_ids,
+                attention_mask,
                 top_k=top_k,
                 lambda_penalty=lambda_penalty,
                 temperature=temperature,
@@ -269,6 +303,8 @@ def generate_risk_aware(
 
         next_tensor = torch.tensor([[next_id]], dtype=torch.long, device=device)
         input_ids = torch.cat([input_ids, next_tensor], dim=1)
+        next_attn = torch.ones((1, 1), dtype=attention_mask.dtype, device=device)
+        attention_mask = torch.cat([attention_mask, next_attn], dim=1)
 
     return tokenizer.decode(input_ids[0], skip_special_tokens=False)
 
@@ -288,9 +324,11 @@ def generate_baseline(
         return_tensors="pt",
         add_special_tokens=False,
     ).input_ids.to(device)
+    attention_mask = torch.ones_like(input_ids, device=device)
 
     out = model.generate(
         input_ids,
+        attention_mask=attention_mask,
         max_new_tokens=max_new_tokens,
         do_sample=True,
         temperature=temperature,
