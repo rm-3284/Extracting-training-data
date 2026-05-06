@@ -1,0 +1,160 @@
+# Carlini-style extraction (generation only) for open base vs post-trained checkpoints.
+# Run (500 lines per method → 1000 lines/run with top_k + temperature_decay):
+#   python -m mia_eval.run_carlini_extraction_batch --config mia_eval/config/carlini_open_models.yaml
+# Cluster: sbatch jobscript/run_carlini_open_extract_array.slurm
+# One machine: ./jobscript/run_carlini_open_extract_local.sh
+#
+# Hugging Face IDs: verify on the Hub before large runs; rename if a repo moved.
+# DCLM instruct: user table says DCLM-7B-Instruct; closest public checkpoint is often mlfoundations/dclm-7b-it.
+
+experiment:
+  seed: 42
+  output_dir: mia_eval_outputs
+  device: null
+
+generation:
+  # Match mia_eval/config/defaults.yaml — Carlini §5.1.1 style empty prompt → 256 tokens.
+  # Per **enabled** method: `top_k`, `temperature_decay`, and (if nucleus.enabled) `nucleus`
+  # each get this many lines. With internet_prefix (Carlini §5.1.2: CC prefix + top-n only) → 500×3 = 1500 rows/model.
+  num_samples_per_strategy: 500
+  batch_size: 4
+  seq_len: 256
+  top_k: 40
+  top_p: 1.0
+  temperature_decay:
+    enabled: true
+  nucleus:
+    enabled: false
+    top_p: 0.95
+    temperature: 1.0
+  # Carlini §5.1.2: sample 5–10 tokens of web context, then **top-n** (here: top_k) — not temperature decay.
+  # Paper uses three separate pools: Top-n | Temperature | Internet (Table 2 / Figure 4).
+  # To also run internet + temperature_decay (extra), set apply_to: [top_k, temperature_decay].
+  internet_prefix:
+    enabled: true
+    apply_to:
+      - top_k
+    dataset_name: allenai/c4
+    dataset_config: en
+    text_field: text
+    split: train
+    prefix_tokens: 10
+    min_doc_chars: 80
+    prefix_chars_max: 512
+    skip_initial_documents: 0
+  add_training_excerpts_members: 0
+  add_wikipedia_nonmembers: 0
+
+# Each entry becomes output_dir/carlini_extract/<run_key>/samples.jsonl
+carlini_runs:
+  # --- OLMo 2 (Ai2) ---
+  - run_key: olmo2_7b_base
+    project: OLMo2
+    hf_model_id: allenai/OLMo-2-1124-7B
+    variant: base
+    post_training: null
+    torch_dtype: bfloat16
+
+  - run_key: olmo2_7b_instruct
+    project: OLMo2
+    hf_model_id: allenai/OLMo-2-1124-7B-Instruct
+    variant: post_train
+    post_training: "SFT + DPO + RLVR"
+    torch_dtype: bfloat16
+
+  # --- OLMo 1 (Ai2) ---
+  - run_key: olmo1_7b_base
+    project: OLMo1
+    hf_model_id: allenai/OLMo-7B
+    variant: base
+    post_training: null
+    torch_dtype: bfloat16
+
+  - run_key: olmo1_7b_instruct
+    project: OLMo1
+    hf_model_id: allenai/OLMo-7B-Instruct
+    variant: post_train
+    post_training: "SFT + DPO (Tülu 2)"
+    torch_dtype: bfloat16
+
+  # --- LLM360 Amber ---
+  - run_key: llm360_amber_base
+    project: LLM360
+    hf_model_id: LLM360/Amber
+    variant: base
+    post_training: null
+    torch_dtype: float16
+
+  - run_key: llm360_amber_chat
+    project: LLM360
+    hf_model_id: LLM360/AmberChat
+    variant: post_train
+    post_training: SFT
+    torch_dtype: float16
+
+  - run_key: llm360_amber_safe
+    project: LLM360
+    hf_model_id: LLM360/AmberSafe
+    variant: post_train
+    post_training: Safety-focused SFT
+    torch_dtype: float16
+
+  # --- Pythia + Dolly-v2 ---
+  - run_key: pythia_12b_base
+    project: Pythia
+    hf_model_id: EleutherAI/pythia-12b
+    variant: base
+    post_training: null
+    torch_dtype: float16
+
+  - run_key: dolly_v2_12b
+    project: Pythia
+    hf_model_id: databricks/dolly-v2-12b
+    variant: post_train
+    post_training: "SFT (Databricks-Dolly)"
+    torch_dtype: float16
+
+  # --- StarCoder 2 ---
+  - run_key: starcoder2_15b_base
+    project: StarCoder2
+    hf_model_id: bigcode/starcoder2-15b
+    variant: base
+    post_training: null
+    torch_dtype: float16
+
+  - run_key: starcoder2_15b_instruct
+    project: StarCoder2
+    hf_model_id: bigcode/starcoder2-15b-instruct-v0.1
+    variant: post_train
+    post_training: "SFT (Code & Logic)"
+    torch_dtype: float16
+
+  # --- RedPajama ---
+  - run_key: redpajama_7b_base
+    project: RedPajama
+    hf_model_id: togethercomputer/RedPajama-INCITE-7B-Base
+    variant: base
+    post_training: null
+    torch_dtype: float16
+
+  - run_key: redpajama_7b_chat
+    project: RedPajama
+    hf_model_id: togethercomputer/RedPajama-INCITE-7B-Chat
+    variant: post_train
+    post_training: "SFT + RLHF"
+    torch_dtype: float16
+
+  # --- DCLM (Apple / MLCommons-style releases) ---
+  - run_key: dclm_7b_base
+    project: DCLM
+    hf_model_id: apple/DCLM-7B
+    variant: base
+    post_training: null
+    torch_dtype: bfloat16
+
+  - run_key: dclm_7b_instruct
+    project: DCLM
+    hf_model_id: mlfoundations/dclm-7b-it
+    variant: post_train
+    post_training: "Instruction-tuned (public IT checkpoint)"
+    torch_dtype: bfloat16
