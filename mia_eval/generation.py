@@ -116,7 +116,8 @@ def _next_prefix_id_batch(
         enc = tokenizer(
             text,
             add_special_tokens=False,
-            truncation=False,
+            truncation=True,
+            max_length=prefix_tokens,
             return_tensors="pt",
         )
         ids = enc["input_ids"][0]

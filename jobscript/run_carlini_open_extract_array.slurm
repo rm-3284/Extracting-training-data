@@ -24,7 +24,9 @@
 #   NUM_SAMPLES_PER_STRATEGY  (default: use YAML, currently 500)
 #   BATCH_SIZE                (default: use YAML generation.batch_size)
 #   CARLINI_CONFIG            (default: mia_eval/config/carlini_open_models.yaml)
+#   MANIFEST_PATH             (default: mia_eval_outputs/carlini_extract/manifest.json)
 #   CONDA_ENV
+#   INSTALL_OLMO_DEPS         (default: 1; auto-install/check hf_olmo for OLMo runs)
 #
 # Edit #SBATCH --chdir= to your clone if different.
 
@@ -33,7 +35,7 @@ set -euo pipefail
 export PROJECT_ROOT="${SLURM_SUBMIT_DIR:-$(pwd)}"
 # shellcheck source=jobscript/_slurm_prologue.sh
 source "${PROJECT_ROOT}/jobscript/_slurm_prologue.sh"
-conda activate "${CONDA_ENV:-base}"
+conda activate "${CONDA_ENV:-/n/fs/vision-mix/rm4411/conda_envs/carlini}"
 
 mkdir -p "logs/${SLURM_ARRAY_JOB_ID:-manual}_${SLURM_ARRAY_TASK_ID:-0}"
 
@@ -68,6 +70,7 @@ fi
 
 RUN_KEY="${RUN_KEYS[$IDX]}"
 CONFIG="${CARLINI_CONFIG:-mia_eval/config/carlini_open_models.yaml}"
+MANIFEST_PATH="${MANIFEST_PATH:-mia_eval_outputs/carlini_extract/manifest.json}"
 
 EXTRA=()
 if [[ -n "${NUM_SAMPLES_PER_STRATEGY:-}" ]]; then
@@ -79,7 +82,27 @@ fi
 
 echo "Task ${IDX}: RUN_KEY=${RUN_KEY}"
 cd "${PROJECT_ROOT}"
+
+# OLMo checkpoints on HF require hf_olmo runtime in the same active conda env.
+if [[ "${RUN_KEY}" == olmo* ]] && [[ "${INSTALL_OLMO_DEPS:-1}" == "1" ]]; then
+  python - <<'PY'
+import importlib.util
+import subprocess
+import sys
+
+if importlib.util.find_spec("hf_olmo") is None:
+    print("Installing OLMo deps into active env: ai2-olmo transformers accelerate sentencepiece")
+    subprocess.check_call(
+        [sys.executable, "-m", "pip", "install", "-U", "ai2-olmo", "transformers", "accelerate", "sentencepiece"]
+    )
+else:
+    print("hf_olmo already available in active env")
+PY
+fi
+
 python -m mia_eval.run_carlini_extraction_batch \
   --config "${CONFIG}" \
+  --manifest-path "${MANIFEST_PATH}" \
+  --manifest-mode merge \
   --only "${RUN_KEY}" \
   "${EXTRA[@]}"

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import fcntl
 import json
 import random
 import sys
@@ -35,6 +36,65 @@ if str(ROOT) not in sys.path:
 
 from mia_eval.config_loader import load_yaml
 from mia_eval.generation import generate_diverse_samples
+
+
+def _merge_manifest_runs(
+    existing_runs: List[Dict[str, Any]], new_runs: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """
+    Merge runs by ``run_key`` (new entries replace prior status for same key).
+    Preserves original order for existing keys and appends unseen keys.
+    """
+    by_key: Dict[str, Dict[str, Any]] = {}
+    order: List[str] = []
+    for r in existing_runs:
+        k = str(r.get("run_key", ""))
+        if not k:
+            continue
+        if k not in by_key:
+            order.append(k)
+        by_key[k] = r
+    for r in new_runs:
+        k = str(r.get("run_key", ""))
+        if not k:
+            continue
+        if k not in by_key:
+            order.append(k)
+        by_key[k] = r
+    return [by_key[k] for k in order]
+
+
+def _merge_manifest_locked(
+    manifest_path: Path, partial: Dict[str, Any], config_path: Path, out_root: Path
+) -> Dict[str, Any]:
+    """
+    Merge a task's partial results into a shared manifest with an advisory lock.
+    Safe for Slurm array jobs running concurrently on a shared filesystem.
+    """
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = manifest_path.with_suffix(manifest_path.suffix + ".lock")
+    with open(lock_path, "w", encoding="utf-8") as lockf:
+        fcntl.flock(lockf.fileno(), fcntl.LOCK_EX)
+        if manifest_path.is_file():
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                merged: Dict[str, Any] = json.load(f)
+        else:
+            merged = {
+                "config_path": str(config_path.resolve()),
+                "started_utc": datetime.now(timezone.utc).isoformat(),
+                "output_root": str(out_root.resolve()),
+                "runs": [],
+            }
+        merged["config_path"] = str(config_path.resolve())
+        merged["output_root"] = str(out_root.resolve())
+        merged["runs"] = _merge_manifest_runs(
+            list(merged.get("runs") or []), list(partial.get("runs") or [])
+        )
+        merged["finished_utc"] = datetime.now(timezone.utc).isoformat()
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump(merged, f, indent=2, ensure_ascii=False)
+        fcntl.flock(lockf.fileno(), fcntl.LOCK_UN)
+    return merged
 
 
 def _set_seeds(seed: int) -> None:
@@ -94,6 +154,19 @@ def run() -> None:
         type=int,
         default=None,
         help="Override generation.batch_size (GPU memory)",
+    )
+    p.add_argument(
+        "--manifest-path",
+        type=Path,
+        default=None,
+        help="Shared manifest path (default: <output_root>/manifest.json).",
+    )
+    p.add_argument(
+        "--manifest-mode",
+        type=str,
+        choices=("merge", "replace"),
+        default="merge",
+        help="merge: lock+merge with existing manifest (array-safe); replace: overwrite.",
     )
     args = p.parse_args()
 
@@ -169,7 +242,7 @@ def run() -> None:
             )
         return
 
-    manifest: Dict[str, Any] = {
+    manifest_partial: Dict[str, Any] = {
         "config_path": str(args.config.resolve()),
         "started_utc": datetime.now(timezone.utc).isoformat(),
         "output_root": str(out_root.resolve()),
@@ -183,7 +256,7 @@ def run() -> None:
         out_jsonl = out_dir / "samples.jsonl"
         if args.skip_existing and out_jsonl.is_file():
             print(f"[skip] {run_key}: exists {out_jsonl}")
-            manifest["runs"].append(
+            manifest_partial["runs"].append(
                 {
                     "run_key": run_key,
                     "status": "skipped_existing",
@@ -223,7 +296,7 @@ def run() -> None:
         except Exception as e:
             err = f"{type(e).__name__}: {e}"
             print(f"[fail] {run_key}: {err}")
-            manifest["runs"].append(
+            manifest_partial["runs"].append(
                 {
                     "run_key": run_key,
                     "status": "error",
@@ -235,7 +308,7 @@ def run() -> None:
                 torch.cuda.empty_cache()
             continue
 
-        manifest["runs"].append(
+        manifest_partial["runs"].append(
             {
                 "run_key": run_key,
                 "status": "ok",
@@ -246,11 +319,20 @@ def run() -> None:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-    manifest["finished_utc"] = datetime.now(timezone.utc).isoformat()
-    manifest_path = out_root / "manifest.json"
-    with open(manifest_path, "w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2, ensure_ascii=False)
-    print(f"Wrote {manifest_path}")
+    manifest_partial["finished_utc"] = datetime.now(timezone.utc).isoformat()
+    manifest_path = args.manifest_path or (out_root / "manifest.json")
+    if args.manifest_mode == "replace":
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump(manifest_partial, f, indent=2, ensure_ascii=False)
+        print(f"Wrote {manifest_path} (replace)")
+    else:
+        _merge_manifest_locked(
+            manifest_path=manifest_path,
+            partial=manifest_partial,
+            config_path=args.config,
+            out_root=out_root,
+        )
+        print(f"Wrote {manifest_path} (merge)")
 
 
 if __name__ == "__main__":
