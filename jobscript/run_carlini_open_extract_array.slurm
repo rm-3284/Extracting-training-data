@@ -27,6 +27,7 @@
 #   MANIFEST_PATH             (default: mia_eval_outputs/carlini_extract/manifest.json)
 #   CONDA_ENV
 #   INSTALL_OLMO_DEPS         (default: 1; auto-install/check hf_olmo for OLMo runs)
+#   INSTALL_DCLM_DEPS         (default: 1; install newer transformers for OpenLM checkpoints)
 #
 # Edit #SBATCH --chdir= to your clone if different.
 
@@ -97,6 +98,19 @@ if importlib.util.find_spec("hf_olmo") is None:
     )
 else:
     print("hf_olmo already available in active env")
+PY
+fi
+
+# DCLM checkpoints can use OpenLM architecture, which may require a newer Transformers build.
+if [[ "${RUN_KEY}" == dclm* ]] && [[ "${INSTALL_DCLM_DEPS:-1}" == "1" ]]; then
+  python - <<'PY'
+import subprocess
+import sys
+
+print("Ensuring DCLM/OpenLM support: upgrading transformers from source")
+subprocess.check_call(
+    [sys.executable, "-m", "pip", "install", "-U", "git+https://github.com/huggingface/transformers.git"]
+)
 PY
 fi
 
