@@ -33,6 +33,8 @@
 #   BENCH_OUTPUT      --output JSON path (default: logs/${SLURM_JOB_ID}/mimir_bench.json)
 #   SKIP_SLOW         set to 1 to pass --skip-slow
 #   AUTO_INSTALL_DEPS set to 0 to disable auto pip install when missing
+#   PIP_TARGET        writable dir for --target installs (default: ${PROJECT_ROOT}/.slurm_pip_deps)
+#   TMP_BASE          temp dir Slurm/prologue use (default: ${PROJECT_ROOT}/tmp — avoids /scratch/... if missing)
 #   BENCH_ARGS        optional extra CLI tokens (unquoted expansion), e.g.:
 #                       export BENCH_ARGS="--verbose --seed 1 --models gpt_neo_2p7"
 #   HF_HOME           Hugging Face cache (defaults under PROJECT_ROOT below)
@@ -42,6 +44,11 @@ set -euo pipefail
 mkdir -p logs
 
 export PROJECT_ROOT="${SLURM_SUBMIT_DIR:-/n/fs/vision-mix/rm4411/Extracting-training-data}"
+# Writable temp (cluster may set TMPDIR=/scratch/... which does not exist for every user).
+export TMP_BASE="${TMP_BASE:-${PROJECT_ROOT}/tmp}"
+mkdir -p "${TMP_BASE}"
+export TMPDIR="${TMPDIR:-${TMP_BASE}}"
+
 # shellcheck source=jobscript/_slurm_prologue.sh
 source "${PROJECT_ROOT}/jobscript/_slurm_prologue.sh"
 conda activate "${CONDA_ENV:-base}"
@@ -77,20 +84,32 @@ echo "PROJECT_ROOT=${PROJECT_ROOT}"
 echo "Job ID: ${JOB_TAG}"
 echo "Writing: ${OUT_JSON}"
 echo "Python: $(command -v python)"
+export PIP_TARGET="${PIP_TARGET:-${PROJECT_ROOT}/.slurm_pip_deps}"
+mkdir -p "${PIP_TARGET}"
 if [[ "${AUTO_INSTALL_DEPS:-1}" == "1" ]]; then
 python - <<'PY'
-import importlib.util
+import os
 import subprocess
 import sys
 
-missing = []
-for name in ("huggingface_hub", "datasets"):
-    if importlib.util.find_spec(name) is None:
-        missing.append(name)
+pip_target = os.environ["PIP_TARGET"]
+os.makedirs(pip_target, exist_ok=True)
 
-if missing:
-    print("Missing python deps in active conda env:", ", ".join(missing))
-    print("Installing/repairing via pip in this env ...")
+
+def deps_ok():
+    try:
+        import huggingface_hub  # noqa: F401
+        from huggingface_hub import CommitInfo  # noqa: F401
+        import datasets  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+if not deps_ok():
+    print("huggingface_hub/datasets missing or incompatible; installing with pip --target")
+    print("  target:", pip_target)
+    print("  python:", sys.executable)
     subprocess.check_call(
         [
             sys.executable,
@@ -98,11 +117,15 @@ if missing:
             "pip",
             "install",
             "-U",
+            "--target",
+            pip_target,
             "huggingface_hub>=0.23",
             "datasets>=2.19",
         ]
     )
 PY
+  # Prefer packages in PIP_TARGET over a read-only shared Anaconda site-packages.
+  export PYTHONPATH="${PIP_TARGET}${PYTHONPATH:+:${PYTHONPATH}}"
 fi
 
 python - <<'PY'
