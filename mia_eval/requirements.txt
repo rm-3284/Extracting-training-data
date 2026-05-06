@@ -1,6 +1,8 @@
 torch>=2.0
 numpy>=1.20
 transformers>=4.36
+# Optional: DCLM / OpenLM checkpoints (``model_type=openlm``) — see ``mia_eval/openlm_hf_loader.py``
+#   pip install "git+https://github.com/mlfoundations/open_lm.git"
 datasets>=2.14
 pyyaml>=6.0
 scikit-learn>=1.2

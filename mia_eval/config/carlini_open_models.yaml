@@ -107,9 +107,10 @@ carlini_runs:
     post_training: null
     torch_dtype: float16
 
+  # Mirror: databricks/dolly-v2-12b is no longer reliably available on the Hub.
   - run_key: dolly_v2_12b
     project: Pythia
-    hf_model_id: databricks/dolly-v2-12b
+    hf_model_id: seungwon12/dolly
     variant: post_train
     post_training: "SFT (Databricks-Dolly)"
     torch_dtype: float16

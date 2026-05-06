@@ -27,7 +27,7 @@
 #   MANIFEST_PATH             (default: mia_eval_outputs/carlini_extract/manifest.json)
 #   CONDA_ENV
 #   INSTALL_OLMO_DEPS         (default: 1; auto-install/check hf_olmo for OLMo runs)
-#   INSTALL_DCLM_DEPS         (default: 1; install newer transformers for OpenLM checkpoints)
+#   INSTALL_DCLM_DEPS         (default: 1; install ``open_lm`` so DCLM ``openlm`` checkpoints register with Transformers)
 #
 # Edit #SBATCH --chdir= to your clone if different.
 
@@ -44,6 +44,12 @@ export HF_HOME="${HF_HOME:-/n/fs/vision-mix/rm4411/huggingface}"
 export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-$HF_HOME}"
 export TORCH_HOME="${TORCH_HOME:-/n/fs/vision-mix/rm4411/torch}"
 export XDG_CACHE_HOME="${XDG_CACHE_HOME:-/n/fs/vision-mix/rm4411/cache}"
+# Prefer node-local /tmp if TMPDIR points to a missing scratch path.
+if [[ -n "${TMPDIR:-}" ]] && [[ ! -d "${TMPDIR}" ]]; then
+  echo "TMPDIR missing (${TMPDIR}); falling back to /tmp/${USER}_tmp"
+  export TMPDIR="/tmp/${USER}_tmp"
+fi
+mkdir -p "${TMPDIR:-/tmp/${USER}_tmp}" || export TMPDIR="/tmp"
 
 RUN_KEYS=(
   olmo2_7b_base
@@ -101,16 +107,34 @@ else:
 PY
 fi
 
-# DCLM checkpoints can use OpenLM architecture, which may require a newer Transformers build.
+# DCLM: ``model_type=openlm`` is wired via ``mlfoundations/open_lm`` (registers OpenLMForCausalLM), not stock Transformers alone.
 if [[ "${RUN_KEY}" == dclm* ]] && [[ "${INSTALL_DCLM_DEPS:-1}" == "1" ]]; then
   python - <<'PY'
+import importlib.util
 import subprocess
 import sys
 
-print("Ensuring DCLM/OpenLM support: upgrading transformers from source")
-subprocess.check_call(
-    [sys.executable, "-m", "pip", "install", "-U", "git+https://github.com/huggingface/transformers.git"]
-)
+py = sys.executable
+if importlib.util.find_spec("open_lm") is None or importlib.util.find_spec("open_lm.hf") is None:
+    print("Installing open_lm (DCLM / OpenLM HF integration)")
+    subprocess.check_call(
+        [
+            py,
+            "-m",
+            "pip",
+            "install",
+            "-U",
+            "git+https://github.com/mlfoundations/open_lm.git",
+            "transformers",
+            "accelerate",
+            "sentencepiece",
+        ]
+    )
+else:
+    print("open_lm already available; refreshing transformers stack")
+    subprocess.check_call(
+        [py, "-m", "pip", "install", "-U", "transformers", "accelerate", "sentencepiece"]
+    )
 PY
 fi
 

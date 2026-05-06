@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any, Dict, Optional, Tuple
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from mia_eval.openlm_hf_loader import ensure_openlm_hf_registered, is_openlm_load_error
 
 
 def pick_device(cfg_device: Optional[str]) -> torch.device:
@@ -25,6 +28,15 @@ def torch_dtype_from_str(s: Optional[str]) -> Optional[torch.dtype]:
     return m.get(str(s).lower())
 
 
+def _from_pretrained_causal_lm(model_name: str, kwargs: Dict[str, Any]) -> Any:
+    try:
+        return AutoModelForCausalLM.from_pretrained(model_name, **kwargs)
+    except TypeError:
+        kw2 = dict(kwargs)
+        kw2.pop("attn_implementation", None)
+        return AutoModelForCausalLM.from_pretrained(model_name, **kw2)
+
+
 def load_causal_lm(
     model_name: str,
     tokenizer_name: Optional[str],
@@ -34,26 +46,44 @@ def load_causal_lm(
     attn_implementation: Optional[str] = None,
 ) -> Tuple[Any, Any]:
     tok_name = tokenizer_name or model_name
-    tokenizer = AutoTokenizer.from_pretrained(tok_name, trust_remote_code=True)
-    tokenizer.padding_side = "left"
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+    hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN")
+    tok_kwargs: Dict[str, Any] = {"trust_remote_code": True}
+    if hf_token:
+        tok_kwargs["token"] = hf_token
+
+    def _build_tokenizer() -> Any:
+        tok = AutoTokenizer.from_pretrained(tok_name, **tok_kwargs)
+        tok.padding_side = "left"
+        if tok.pad_token is None:
+            tok.pad_token = tok.eos_token
+        return tok
+
+    tokenizer = _build_tokenizer()
 
     kwargs: Dict[str, Any] = {"trust_remote_code": True}
+    if hf_token:
+        kwargs["token"] = hf_token
     if torch_dtype is not None:
         kwargs["torch_dtype"] = torch_dtype
     if attn_implementation:
         kwargs["attn_implementation"] = attn_implementation
 
     try:
-        model = AutoModelForCausalLM.from_pretrained(model_name, **kwargs)
-    except TypeError:
-        kwargs.pop("attn_implementation", None)
-        model = AutoModelForCausalLM.from_pretrained(model_name, **kwargs)
+        model = _from_pretrained_causal_lm(model_name, kwargs)
+    except (ValueError, OSError) as e:
+        if is_openlm_load_error(e):
+            ensure_openlm_hf_registered()
+            tokenizer = _build_tokenizer()
+            model = _from_pretrained_causal_lm(model_name, kwargs)
+        else:
+            raise
     # Compatibility shim for some remote-code models (e.g., older OLMo classes)
     # that do not define this attribute expected by newer generation helpers.
+    # Set on both instance and class, since some code paths inspect class attributes.
     if not hasattr(model, "all_tied_weights_keys"):
         model.all_tied_weights_keys = []
+    if not hasattr(model.__class__, "all_tied_weights_keys"):
+        model.__class__.all_tied_weights_keys = []
     model.to(device)
     model.eval()
     if hasattr(model.config, "pad_token_id") and model.config.pad_token_id is None:
