@@ -95,19 +95,35 @@ def prefix_infilling_score(model, tokenizer, prefix_text, window=64, m=5, k=0.1)
 # Risk-aware decoding
 # -----------------------------
 
-# Version 1: slow but more direct candidate-level MI rescoring.
-# Cost: top_k infilling calls per generated token.
+DEFAULT_DECODE_TOP_K = 20
+DEFAULT_GATE_GAMMA = 5.0
+
+
+def _minmax01_1d(x: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
+    """Map 1D tensor to [0, 1] with min -> 0, max -> 1 (equal values -> zeros)."""
+    lo = x.min()
+    hi = x.max()
+    span = hi - lo
+    if span < eps:
+        return torch.zeros_like(x)
+    return (x - lo) / (span + eps)
+
+
+# Version 1: slow — candidate infilling scores with absolute [0,1] weights (not z-scored),
+# scaled by a sigmoid gate from prefix-only infilling (intervention only when prefix looks risky).
+# Cost: top_k + 1 infilling calls per generated token.
 @torch.no_grad()
 def risk_aware_next_token_slow(
     model,
     tokenizer,
     input_ids,
-    top_k=5,
+    top_k=DEFAULT_DECODE_TOP_K,
     lambda_penalty=0.5,
     temperature=1.0,
     window=64,
     m=5,
     k=0.1,
+    gate_gamma=DEFAULT_GATE_GAMMA,
 ):
     outputs = model(input_ids=input_ids)
     logits = outputs.logits[:, -1, :]
@@ -116,6 +132,17 @@ def risk_aware_next_token_slow(
     topk_log_probs, topk_ids = torch.topk(base_log_probs, k=top_k, dim=-1)
 
     prefix_text = tokenizer.decode(input_ids[0].detach().cpu(), skip_special_tokens=False)
+
+    prefix_risk = prefix_infilling_score(
+        model, tokenizer, prefix_text, window=window, m=m, k=k
+    )
+    gate = torch.sigmoid(
+        torch.tensor(
+            gate_gamma * prefix_risk,
+            device=input_ids.device,
+            dtype=topk_log_probs.dtype,
+        )
+    )
 
     risks = []
     for j in range(top_k):
@@ -129,17 +156,17 @@ def risk_aware_next_token_slow(
         risks.append(risk)
 
     risks = torch.tensor(risks, device=input_ids.device, dtype=topk_log_probs.dtype)
-    risks = (risks - risks.mean()) / (risks.std() + 1e-6)
+    g = _minmax01_1d(risks)
 
-    adjusted_log_probs = topk_log_probs[0] - lambda_penalty * risks
+    adjusted_log_probs = topk_log_probs[0] - lambda_penalty * gate * g
     adjusted_probs = F.softmax(adjusted_log_probs, dim=-1)
 
     sampled_index = torch.multinomial(adjusted_probs, num_samples=1).item()
     return topk_ids[0, sampled_index].item()
 
 
-# Version 2: fast cached prefix-gated MI decoding.
-# Cost: one infilling call every risk_every generated tokens.
+# Version 2: fast — sigmoid(prefix risk) * min-max log-prob danger among top-k.
+# Cost: default one infilling call per token (risk_every=1); optional cache if risk_every>1.
 RISK_CACHE = {"step": -1, "risk": 0.0}
 
 @torch.no_grad()
@@ -147,13 +174,14 @@ def risk_aware_next_token_fast(
     model,
     tokenizer,
     input_ids,
-    top_k=5,
+    top_k=DEFAULT_DECODE_TOP_K,
     lambda_penalty=0.3,
     temperature=1.0,
     window=24,
     m=1,
     k=0.1,
-    risk_every=5,
+    risk_every=1,
+    gate_gamma=DEFAULT_GATE_GAMMA,
 ):
     outputs = model(input_ids=input_ids)
     logits = outputs.logits[:, -1, :]
@@ -162,23 +190,28 @@ def risk_aware_next_token_fast(
     topk_log_probs, topk_ids = torch.topk(base_log_probs, k=top_k, dim=-1)
 
     step = input_ids.shape[1]
+    prefix_text = tokenizer.decode(input_ids[0].detach().cpu(), skip_special_tokens=False)
 
-    if step % risk_every == 0 or RISK_CACHE["step"] < 0:
-        prefix_text = tokenizer.decode(input_ids[0].detach().cpu(), skip_special_tokens=False)
-
+    if risk_every <= 1 or step % risk_every == 0 or RISK_CACHE["step"] < 0:
         RISK_CACHE["risk"] = prefix_infilling_score(
             model, tokenizer, prefix_text, window=window, m=m, k=k
         )
         RISK_CACHE["step"] = step
 
-    risk = RISK_CACHE["risk"]
+    prefix_risk = RISK_CACHE["risk"]
+    gate = torch.sigmoid(
+        torch.tensor(
+            gate_gamma * prefix_risk,
+            device=input_ids.device,
+            dtype=topk_log_probs.dtype,
+        )
+    )
 
-    # Cheap token danger proxy: high-probability tokens are more likely
-    # to continue memorized text under a risky prefix.
-    token_danger = topk_log_probs[0]
-    token_danger = (token_danger - token_danger.mean()) / (token_danger.std() + 1e-6)
+    # Higher base log-prob -> higher danger in [0, 1] (most likely next token penalized most).
+    lp = topk_log_probs[0]
+    token_danger = _minmax01_1d(lp)
 
-    adjusted_log_probs = topk_log_probs[0] - lambda_penalty * risk * token_danger
+    adjusted_log_probs = lp - lambda_penalty * gate * token_danger
     adjusted_probs = F.softmax(adjusted_log_probs, dim=-1)
 
     sampled_index = torch.multinomial(adjusted_probs, num_samples=1).item()
@@ -191,10 +224,12 @@ def generate_risk_aware(
     model,
     tokenizer,
     max_new_tokens=40,
-    top_k=5,
+    top_k=DEFAULT_DECODE_TOP_K,
     lambda_penalty=0.3,
     temperature=1.0,
     mode="fast",   # "fast" or "slow"
+    gate_gamma=DEFAULT_GATE_GAMMA,
+    risk_every=1,
 ):
     global RISK_CACHE
     RISK_CACHE = {"step": -1, "risk": 0.0}
@@ -216,6 +251,7 @@ def generate_risk_aware(
                 top_k=top_k,
                 lambda_penalty=lambda_penalty,
                 temperature=temperature,
+                gate_gamma=gate_gamma,
             )
         elif mode == "fast":
             next_id = risk_aware_next_token_fast(
@@ -225,6 +261,8 @@ def generate_risk_aware(
                 top_k=top_k,
                 lambda_penalty=lambda_penalty,
                 temperature=temperature,
+                risk_every=risk_every,
+                gate_gamma=gate_gamma,
             )
         else:
             raise ValueError("mode must be 'fast' or 'slow'")
@@ -341,7 +379,6 @@ def evaluate_fast_on_mimir(
             model,
             tokenizer,
             max_new_tokens=max_new_tokens,
-            top_k=5,
             lambda_penalty=0.3,
             temperature=1.0,
             mode="fast",
@@ -450,7 +487,6 @@ if __name__ == "__main__":
         model,
         tokenizer,
         max_new_tokens=40,
-        top_k=5,
         lambda_penalty=0.3,
         temperature=1.0,
         mode="fast",
@@ -462,7 +498,7 @@ if __name__ == "__main__":
         model,
         tokenizer,
         max_new_tokens=20,
-        top_k=3,
+        top_k=10,
         lambda_penalty=0.5,
         temperature=1.0,
         mode="slow",

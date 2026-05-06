@@ -86,6 +86,8 @@ def run_benchmark_for_model(
     lambda_slow: float,
     top_k: int,
     temperature: float,
+    gate_gamma: float,
+    risk_every: int,
     verbose: bool,
 ) -> Dict[str, Any]:
     hf_name = MODEL_CONFIGS[model_key]
@@ -135,6 +137,8 @@ def run_benchmark_for_model(
                     lambda_penalty=lambda_fast,
                     temperature=temperature,
                     mode="fast",
+                    gate_gamma=gate_gamma,
+                    risk_every=risk_every,
                 )
             else:
                 gen = generate_risk_aware(
@@ -146,6 +150,7 @@ def run_benchmark_for_model(
                     lambda_penalty=lambda_slow,
                     temperature=temperature,
                     mode="slow",
+                    gate_gamma=gate_gamma,
                 )
 
             ov, lcp = token_overlap_with_suffix(
@@ -235,13 +240,30 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--slow-max-new-tokens",
         type=int,
-        default=24,
-        help="max_new_tokens for slow mode (each step is expensive)",
+        default=64,
+        help="max_new_tokens for slow mode (defaults to match baseline/fast; lower for speed)",
     )
     p.add_argument("--skip-slow", action="store_true", help="Only baseline + fast")
     p.add_argument("--lambda-fast", type=float, default=0.3)
     p.add_argument("--lambda-slow", type=float, default=0.5)
-    p.add_argument("--top-k", type=int, default=5)
+    p.add_argument(
+        "--top-k",
+        type=int,
+        default=20,
+        help="Candidate pool size for fast/slow top-k resampling",
+    )
+    p.add_argument(
+        "--gate-gamma",
+        type=float,
+        default=5.0,
+        help="sigmoid(gamma * prefix_infilling) scales how strongly decoding intervenes",
+    )
+    p.add_argument(
+        "--risk-every",
+        type=int,
+        default=1,
+        help="Recompute prefix infilling every N tokens in fast mode (1 = every step)",
+    )
     p.add_argument("--temperature", type=float, default=1.0)
     p.add_argument("--output", type=str, default="", help="Write full JSON results here")
     p.add_argument("-v", "--verbose", action="store_true")
@@ -284,6 +306,8 @@ def main() -> None:
             "lambda_fast": args.lambda_fast,
             "lambda_slow": args.lambda_slow,
             "top_k": args.top_k,
+            "gate_gamma": args.gate_gamma,
+            "risk_every": args.risk_every,
             "temperature": args.temperature,
         },
         "results_by_model": {},
@@ -306,6 +330,8 @@ def main() -> None:
             lambda_slow=args.lambda_slow,
             top_k=args.top_k,
             temperature=args.temperature,
+            gate_gamma=args.gate_gamma,
+            risk_every=args.risk_every,
             verbose=args.verbose,
         )
 

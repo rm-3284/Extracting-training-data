@@ -57,9 +57,11 @@ What the `__main__` block does, in order:
 python memorization_detection/run_mimir_decoding_benchmark.py --n-examples 50 --output bench.json
 ```
 
-**Slow mode** runs several infilling passes **per generated token**; the default `--slow-max-new-tokens 24` keeps runs tractable. Match lengths across modes with e.g. `--max-new-tokens-baseline 32 --max-new-tokens-fast 32 --slow-max-new-tokens 32` when you can afford it. Skip slow entirely: `--skip-slow`.
+**Slow mode** runs several infilling passes **per generated token**; the benchmark defaults **`--slow-max-new-tokens 64`** so lengths match baseline/fast (use e.g. **`24`** for a shorter/cheaper slow run). Skip slow entirely: `--skip-slow`.
 
-Other useful flags: `--models gpt_neo_2p7 pythia_1p4`, `--seed 0`, `--verbose`.
+Other useful flags: `--models ...`, `--seed 0`, `--verbose`, **`--top-k`** (default **20**), **`--gate-gamma`** (sigmoid gate), **`--risk-every`** (fast prefix refresh interval).
+
+**Slurm:** see [`../jobscript/run_mimir_decoding_benchmark.slurm`](../jobscript/run_mimir_decoding_benchmark.slurm) (GPU, conda via `_slurm_prologue.sh`, `HF_TOKEN`, optional `N_EXAMPLES` / `SKIP_SLOW` / `BENCH_OUTPUT`).
 
 ### Changing the model
 
@@ -96,8 +98,8 @@ Scoring calls [`../infilling_score/infilling_score.py`](../infilling_score/infil
 2. **`prefix_infilling_score(model, tokenizer, ...)`** — Encodes the prefix, keeps the last `window` tokens, decodes to text, runs `infilling_score(model, tokenizer, text, ...)`.
 
 3. **Risk-aware next token**
-   - **Slow** (`risk_aware_next_token_slow`): For each of the top-k logits, append that token to the prefix text, compute a prefix infilling score, z-score across the k candidates, subtract `lambda_penalty * risk` from log-probs, softmax, sample. Cost scales with **k infilling evaluations per step**.
-   - **Fast** (`risk_aware_next_token_fast`): Every `risk_every` tokens, compute **one** cached infilling score on the current prefix. Penalty uses that scalar times a **normalized log-probability** proxy over the top-k candidates. Cost: **one infilling call every `risk_every` steps**.
+   - **Slow** (`risk_aware_next_token_slow`): Infilling score on the prefix alone defines a **sigmoid gate** `sigmoid(gamma * s)`. For each of the top-k candidates, infilling on `prefix+token` gets a **min–max weight** `g` in `[0, 1]` across candidates (not z-scored). Adjusted log-probs are `log p - lambda * gate * g`. Cost: **`k + 1`** infilling calls per step (defaults: wider **top-k** pool).
+   - **Fast** (`risk_aware_next_token_fast`): Same **gate** from prefix infilling each step by default (`risk_every=1`). Among top-k, **min–max** base log-probs give token danger (likely tokens penalized most when the gate is high). Cost: **one infilling call per step** unless `risk_every > 1` (cached prefix score).
 
 4. **`evaluate_fast_on_mimir(rows, model, tokenizer, ...)`** — For MIMIR **member** strings, split into prefix/suffix by token count; compare baseline `generate` vs fast risk-aware continuation using token overlap and longest common prefix (LCP) with the true suffix.
 
