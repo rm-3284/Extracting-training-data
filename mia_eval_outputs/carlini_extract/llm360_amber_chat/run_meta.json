@@ -1,0 +1,41 @@
+{
+  "run_key": "llm360_amber_chat",
+  "project": "LLM360",
+  "hf_model_id": "LLM360/AmberChat",
+  "tokenizer": "LLM360/AmberChat",
+  "torch_dtype": "float16",
+  "variant": "post_train",
+  "post_training": "SFT",
+  "generation": {
+    "num_samples_per_strategy": 500,
+    "batch_size": 4,
+    "seq_len": 256,
+    "top_k": 40,
+    "top_p": 1.0,
+    "temperature_decay": {
+      "enabled": true
+    },
+    "nucleus": {
+      "enabled": false,
+      "top_p": 0.95,
+      "temperature": 1.0
+    },
+    "internet_prefix": {
+      "enabled": true,
+      "apply_to": [
+        "top_k"
+      ],
+      "dataset_name": "allenai/c4",
+      "dataset_config": "en",
+      "text_field": "text",
+      "split": "train",
+      "prefix_tokens": 10,
+      "min_doc_chars": 80,
+      "prefix_chars_max": 512,
+      "skip_initial_documents": 0
+    },
+    "add_training_excerpts_members": 0,
+    "add_wikipedia_nonmembers": 0
+  },
+  "seed": 42
+}

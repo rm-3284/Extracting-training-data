@@ -1,0 +1,14 @@
+{
+  "config_path": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval/config/carlini_open_models.yaml",
+  "started_utc": "2026-05-06T11:54:27.603754+00:00",
+  "output_root": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract",
+  "runs": [
+    {
+      "run_key": "starcoder2_15b_base",
+      "status": "ok",
+      "samples_jsonl": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract/starcoder2_15b_base/samples.jsonl",
+      "run_meta": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract/starcoder2_15b_base/run_meta.json"
+    }
+  ],
+  "finished_utc": "2026-05-06T13:18:44.665285+00:00"
+}
