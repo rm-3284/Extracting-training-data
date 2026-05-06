@@ -3,7 +3,7 @@
   "output": "/n/fs/vision-mix/rm4411/Extracting-training-data/data/wbc_only/distil_proxy_shards/distil_proxy_wbc_shard0003_of_0032.jsonl",
   "active_model": "distil_qwen25_7b_instruct",
   "target_model": "alibaba-pai/DistilQwen2.5-7B-Instruct",
-  "reference_model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "reference_model": "Qwen/Qwen2.5-0.5B",
   "wbc_params_open_model_wbc": {
     "min_window": 2,
     "max_window": 40,
@@ -21,10 +21,10 @@
   "n_rows_written": 382,
   "distribution": {
     "n": 382,
-    "wbc_mean": 7.554981376970906e-07,
-    "wbc_std": 1.474673533838243e-05,
+    "wbc_mean": 0.0,
+    "wbc_std": 0.0,
     "wbc_min": 0.0,
-    "wbc_max": 0.0002886002886002886,
+    "wbc_max": 0.0,
     "wbc_quantiles": {
       "p5": 0.0,
       "p25": 0.0,
@@ -35,8 +35,8 @@
     "by_label": {
       "0": {
         "n": 158,
-        "mean": 1.8265841050651176e-06,
-        "std": 2.2887033236783154e-05,
+        "mean": 0.0,
+        "std": 0.0,
         "p50": 0.0
       },
       "1": {
@@ -49,19 +49,19 @@
   },
   "quantification": {
     "n_rows": 382,
-    "n_wbc_exactly_zero": 381,
-    "frac_wbc_exactly_zero": 0.9973821989528796,
+    "n_wbc_exactly_zero": 382,
+    "frac_wbc_exactly_zero": 1.0,
     "wbc_short_available": true,
     "n_wbc_short_nll": 0,
     "frac_wbc_short_nll": 0.0,
     "n_wbc_short_and_exactly_zero": 0,
-    "n_wbc_exactly_zero_not_short": 381,
-    "frac_wbc_exactly_zero_not_short": 0.9973821989528796,
+    "n_wbc_exactly_zero_not_short": 382,
+    "frac_wbc_exactly_zero_not_short": 1.0,
     "by_label": {
       "0": {
         "n": 158,
-        "n_wbc_exactly_zero": 157,
-        "frac_wbc_exactly_zero": 0.9936708860759493,
+        "n_wbc_exactly_zero": 158,
+        "frac_wbc_exactly_zero": 1.0,
         "n_wbc_short_nll": 0,
         "frac_wbc_short_nll": 0.0
       },
