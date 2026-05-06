@@ -32,6 +32,7 @@
 #   N_EXAMPLES        --n-examples (default: 50)
 #   BENCH_OUTPUT      --output JSON path (default: logs/${SLURM_JOB_ID}/mimir_bench.json)
 #   SKIP_SLOW         set to 1 to pass --skip-slow
+#   AUTO_INSTALL_DEPS set to 0 to disable auto pip install when missing
 #   BENCH_ARGS        optional extra CLI tokens (unquoted expansion), e.g.:
 #                       export BENCH_ARGS="--verbose --seed 1 --models gpt_neo_2p7"
 #   HF_HOME           Hugging Face cache (defaults under PROJECT_ROOT below)
@@ -76,6 +77,34 @@ echo "PROJECT_ROOT=${PROJECT_ROOT}"
 echo "Job ID: ${JOB_TAG}"
 echo "Writing: ${OUT_JSON}"
 echo "Python: $(command -v python)"
+if [[ "${AUTO_INSTALL_DEPS:-1}" == "1" ]]; then
+python - <<'PY'
+import importlib.util
+import subprocess
+import sys
+
+missing = []
+for name in ("huggingface_hub", "datasets"):
+    if importlib.util.find_spec(name) is None:
+        missing.append(name)
+
+if missing:
+    print("Missing python deps in active conda env:", ", ".join(missing))
+    print("Installing/repairing via pip in this env ...")
+    subprocess.check_call(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "-U",
+            "huggingface_hub>=0.23",
+            "datasets>=2.19",
+        ]
+    )
+PY
+fi
+
 python - <<'PY'
 import sys
 print("Python executable:", sys.executable)
