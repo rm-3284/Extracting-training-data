@@ -1,0 +1,1445 @@
+{
+  "config": {
+    "models": [
+      "gpt_neo_2p7",
+      "pythia_2p8",
+      "pythia_1p4"
+    ],
+    "n_examples_requested": 50,
+    "seed": 0,
+    "mimir_config": "arxiv",
+    "mimir_split": "ngram_7_0.2",
+    "prefix_tokens": 64,
+    "suffix_tokens": 64,
+    "max_new_tokens_baseline": 64,
+    "max_new_tokens_fast": 64,
+    "max_new_tokens_slow": 24,
+    "skip_slow": false,
+    "lambda_fast": 0.3,
+    "lambda_slow": 0.5,
+    "top_k": 5,
+    "temperature": 1.0
+  },
+  "results_by_model": {
+    "gpt_neo_2p7": {
+      "model_key": "gpt_neo_2p7",
+      "hf_model_name": "EleutherAI/gpt-neo-2.7B",
+      "summary": {
+        "baseline": {
+          "mean_overlap": 0.0278125,
+          "mean_lcp": 0.88,
+          "n_scored": 50
+        },
+        "fast": {
+          "mean_overlap": 0.03630952380952381,
+          "mean_lcp": 1.36,
+          "n_scored": 50
+        },
+        "slow": {
+          "mean_overlap": 0.07416666666666666,
+          "mean_lcp": 1.16,
+          "n_scored": 50
+        }
+      },
+      "per_example": [
+        {
+          "example_index": 0,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.031746031746031744,
+          "fast_lcp": 1,
+          "slow_overlap": 0.08333333333333333,
+          "slow_lcp": 2
+        },
+        {
+          "example_index": 1,
+          "baseline_overlap": 0.078125,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.3125,
+          "fast_lcp": 20,
+          "slow_overlap": 0.2916666666666667,
+          "slow_lcp": 6
+        },
+        {
+          "example_index": 2,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 1,
+          "slow_overlap": 0.125,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 3,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 1,
+          "slow_overlap": 0.08333333333333333,
+          "slow_lcp": 2
+        },
+        {
+          "example_index": 4,
+          "baseline_overlap": 0.09375,
+          "baseline_lcp": 5,
+          "fast_overlap": 0.109375,
+          "fast_lcp": 6,
+          "slow_overlap": 0.25,
+          "slow_lcp": 6
+        },
+        {
+          "example_index": 5,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 6,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 7,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 8,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 9,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.046875,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 10,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 1,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 11,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 12,
+          "baseline_overlap": 0.046875,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 13,
+          "baseline_overlap": 0.046875,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 14,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 1,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 15,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 16,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 17,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 18,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 2,
+          "fast_overlap": 0.03125,
+          "fast_lcp": 2,
+          "slow_overlap": 0.125,
+          "slow_lcp": 2
+        },
+        {
+          "example_index": 19,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.09375,
+          "fast_lcp": 2,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 20,
+          "baseline_overlap": 0.09375,
+          "baseline_lcp": 3,
+          "fast_overlap": 0.03125,
+          "fast_lcp": 2,
+          "slow_overlap": 0.08333333333333333,
+          "slow_lcp": 2
+        },
+        {
+          "example_index": 21,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 22,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 23,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 24,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 2,
+          "fast_overlap": 0.0625,
+          "fast_lcp": 2,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 25,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 26,
+          "baseline_overlap": 0.09375,
+          "baseline_lcp": 6,
+          "fast_overlap": 0.078125,
+          "fast_lcp": 3,
+          "slow_overlap": 0.20833333333333334,
+          "slow_lcp": 5
+        },
+        {
+          "example_index": 27,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.03125,
+          "fast_lcp": 2,
+          "slow_overlap": 0.16666666666666666,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 28,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.046875,
+          "fast_lcp": 1,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 29,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 30,
+          "baseline_overlap": 0.078125,
+          "baseline_lcp": 4,
+          "fast_overlap": 0.1875,
+          "fast_lcp": 4,
+          "slow_overlap": 0.4166666666666667,
+          "slow_lcp": 8
+        },
+        {
+          "example_index": 31,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.03125,
+          "fast_lcp": 1,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 32,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 33,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.09375,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 34,
+          "baseline_overlap": 0.046875,
+          "baseline_lcp": 3,
+          "fast_overlap": 0.0625,
+          "fast_lcp": 3,
+          "slow_overlap": 0.125,
+          "slow_lcp": 3
+        },
+        {
+          "example_index": 35,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.03125,
+          "fast_lcp": 0,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 36,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.1111111111111111,
+          "fast_lcp": 5,
+          "slow_overlap": 0.7916666666666666,
+          "slow_lcp": 6
+        },
+        {
+          "example_index": 37,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.08333333333333333,
+          "slow_lcp": 2
+        },
+        {
+          "example_index": 38,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 39,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 1,
+          "slow_overlap": 0.08333333333333333,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 40,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 41,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 42,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.03125,
+          "fast_lcp": 0,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 43,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 44,
+          "baseline_overlap": 0.09375,
+          "baseline_lcp": 5,
+          "fast_overlap": 0.09375,
+          "fast_lcp": 5,
+          "slow_overlap": 0.125,
+          "slow_lcp": 3
+        },
+        {
+          "example_index": 45,
+          "baseline_overlap": 0.046875,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 46,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 47,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 1,
+          "slow_overlap": 0.125,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 48,
+          "baseline_overlap": 0.125,
+          "baseline_lcp": 3,
+          "fast_overlap": 0.047619047619047616,
+          "fast_lcp": 3,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 49,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        }
+      ]
+    },
+    "pythia_2p8": {
+      "model_key": "pythia_2p8",
+      "hf_model_name": "EleutherAI/pythia-2.8b",
+      "summary": {
+        "baseline": {
+          "mean_overlap": 0.029404761904761902,
+          "mean_lcp": 0.64,
+          "n_scored": 50
+        },
+        "fast": {
+          "mean_overlap": 0.0353125,
+          "mean_lcp": 0.96,
+          "n_scored": 50
+        },
+        "slow": {
+          "mean_overlap": 0.04184782608695652,
+          "mean_lcp": 0.5,
+          "n_scored": 50
+        }
+      },
+      "per_example": [
+        {
+          "example_index": 0,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 1,
+          "baseline_overlap": 0.078125,
+          "baseline_lcp": 4,
+          "fast_overlap": 0.171875,
+          "fast_lcp": 4,
+          "slow_overlap": 0.17391304347826086,
+          "slow_lcp": 3
+        },
+        {
+          "example_index": 2,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 3,
+          "baseline_overlap": 0.078125,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.03125,
+          "fast_lcp": 1,
+          "slow_overlap": 0.125,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 4,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 5,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 6,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 7,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.08333333333333333,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 8,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.171875,
+          "fast_lcp": 1,
+          "slow_overlap": 0.08333333333333333,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 9,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 10,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.125,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 11,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.03125,
+          "fast_lcp": 2,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 12,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 13,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 14,
+          "baseline_overlap": 0.046875,
+          "baseline_lcp": 2,
+          "fast_overlap": 0.046875,
+          "fast_lcp": 2,
+          "slow_overlap": 0.08333333333333333,
+          "slow_lcp": 2
+        },
+        {
+          "example_index": 15,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.03125,
+          "fast_lcp": 0,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 16,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 17,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 18,
+          "baseline_overlap": 0.171875,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.125,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 19,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.03125,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 20,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.078125,
+          "fast_lcp": 2,
+          "slow_overlap": 0.125,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 21,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 22,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 23,
+          "baseline_overlap": 0.046875,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 24,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 1,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 25,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 26,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 27,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 28,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.046875,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 29,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 30,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 31,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 1,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 32,
+          "baseline_overlap": 0.078125,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.0625,
+          "fast_lcp": 2,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 33,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 34,
+          "baseline_overlap": 0.015873015873015872,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.03125,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 35,
+          "baseline_overlap": 0.0625,
+          "baseline_lcp": 3,
+          "fast_overlap": 0.046875,
+          "fast_lcp": 3,
+          "slow_overlap": 0.08333333333333333,
+          "slow_lcp": 2
+        },
+        {
+          "example_index": 36,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.046875,
+          "fast_lcp": 0,
+          "slow_overlap": 0.16666666666666666,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 37,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 38,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.046875,
+          "fast_lcp": 1,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 39,
+          "baseline_overlap": 0.140625,
+          "baseline_lcp": 6,
+          "fast_overlap": 0.21875,
+          "fast_lcp": 14,
+          "slow_overlap": 0.043478260869565216,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 40,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.046875,
+          "fast_lcp": 1,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 41,
+          "baseline_overlap": 0.07936507936507936,
+          "baseline_lcp": 5,
+          "fast_overlap": 0.09375,
+          "fast_lcp": 5,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 42,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.08333333333333333,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 43,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 44,
+          "baseline_overlap": 0.09375,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.03125,
+          "fast_lcp": 1,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 45,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.0625,
+          "fast_lcp": 4,
+          "slow_overlap": 0.20833333333333334,
+          "slow_lcp": 5
+        },
+        {
+          "example_index": 46,
+          "baseline_overlap": 0.046875,
+          "baseline_lcp": 2,
+          "fast_overlap": 0.0625,
+          "fast_lcp": 2,
+          "slow_overlap": 0.125,
+          "slow_lcp": 3
+        },
+        {
+          "example_index": 47,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.046875,
+          "fast_lcp": 1,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 48,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.046875,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 49,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        }
+      ]
+    },
+    "pythia_1p4": {
+      "model_key": "pythia_1p4",
+      "hf_model_name": "EleutherAI/pythia-1.4b",
+      "summary": {
+        "baseline": {
+          "mean_overlap": 0.025942460317460315,
+          "mean_lcp": 0.68,
+          "n_scored": 50
+        },
+        "fast": {
+          "mean_overlap": 0.038125,
+          "mean_lcp": 0.96,
+          "n_scored": 50
+        },
+        "slow": {
+          "mean_overlap": 0.05750000000000001,
+          "mean_lcp": 1.02,
+          "n_scored": 50
+        }
+      },
+      "per_example": [
+        {
+          "example_index": 0,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 2,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.16666666666666666,
+          "slow_lcp": 4
+        },
+        {
+          "example_index": 1,
+          "baseline_overlap": 0.171875,
+          "baseline_lcp": 6,
+          "fast_overlap": 0.1875,
+          "fast_lcp": 10,
+          "slow_overlap": 0.20833333333333334,
+          "slow_lcp": 3
+        },
+        {
+          "example_index": 2,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.03125,
+          "fast_lcp": 1,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 3,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.046875,
+          "fast_lcp": 1,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 4,
+          "baseline_overlap": 0.109375,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 5,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 6,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 7,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.03125,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 8,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.1875,
+          "fast_lcp": 1,
+          "slow_overlap": 0.08333333333333333,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 9,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 10,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.03125,
+          "fast_lcp": 0,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 11,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.046875,
+          "fast_lcp": 1,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 12,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 13,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 14,
+          "baseline_overlap": 0.015873015873015872,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.03125,
+          "fast_lcp": 2,
+          "slow_overlap": 0.08333333333333333,
+          "slow_lcp": 2
+        },
+        {
+          "example_index": 15,
+          "baseline_overlap": 0.078125,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 16,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 17,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 18,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.046875,
+          "fast_lcp": 0,
+          "slow_overlap": 0.08333333333333333,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 19,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 20,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.140625,
+          "fast_lcp": 7,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 21,
+          "baseline_overlap": 0.046875,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 22,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.03125,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 23,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 24,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 1,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 25,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0625,
+          "fast_lcp": 1,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 26,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.03125,
+          "fast_lcp": 1,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 27,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 28,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 1,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 29,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.078125,
+          "fast_lcp": 3,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 30,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.046875,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 31,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.03125,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 32,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.078125,
+          "fast_lcp": 2,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 33,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 34,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.046875,
+          "fast_lcp": 0,
+          "slow_overlap": 0.08333333333333333,
+          "slow_lcp": 2
+        },
+        {
+          "example_index": 35,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 2,
+          "fast_overlap": 0.0625,
+          "fast_lcp": 3,
+          "slow_overlap": 0.08333333333333333,
+          "slow_lcp": 2
+        },
+        {
+          "example_index": 36,
+          "baseline_overlap": 0.09375,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.09375,
+          "fast_lcp": 0,
+          "slow_overlap": 0.125,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 37,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 1,
+          "slow_overlap": 0.08333333333333333,
+          "slow_lcp": 2
+        },
+        {
+          "example_index": 38,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.078125,
+          "fast_lcp": 1,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 39,
+          "baseline_overlap": 0.125,
+          "baseline_lcp": 6,
+          "fast_overlap": 0.03125,
+          "fast_lcp": 1,
+          "slow_overlap": 0.5833333333333334,
+          "slow_lcp": 14
+        },
+        {
+          "example_index": 40,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 1,
+          "slow_overlap": 0.041666666666666664,
+          "slow_lcp": 1
+        },
+        {
+          "example_index": 41,
+          "baseline_overlap": 0.078125,
+          "baseline_lcp": 5,
+          "fast_overlap": 0.03125,
+          "fast_lcp": 1,
+          "slow_overlap": 0.20833333333333334,
+          "slow_lcp": 5
+        },
+        {
+          "example_index": 42,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.03125,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 43,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.0,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 44,
+          "baseline_overlap": 0.046875,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.0625,
+          "fast_lcp": 1,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 45,
+          "baseline_overlap": 0.0625,
+          "baseline_lcp": 1,
+          "fast_overlap": 0.0625,
+          "fast_lcp": 4,
+          "slow_overlap": 0.20833333333333334,
+          "slow_lcp": 5
+        },
+        {
+          "example_index": 46,
+          "baseline_overlap": 0.03125,
+          "baseline_lcp": 2,
+          "fast_overlap": 0.046875,
+          "fast_lcp": 3,
+          "slow_overlap": 0.20833333333333334,
+          "slow_lcp": 5
+        },
+        {
+          "example_index": 47,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.08333333333333333,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 48,
+          "baseline_overlap": 0.015625,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.08333333333333333,
+          "slow_lcp": 0
+        },
+        {
+          "example_index": 49,
+          "baseline_overlap": 0.0,
+          "baseline_lcp": 0,
+          "fast_overlap": 0.015625,
+          "fast_lcp": 0,
+          "slow_overlap": 0.0,
+          "slow_lcp": 0
+        }
+      ]
+    }
+  },
+  "wall_time_s": 25705.73
+}
