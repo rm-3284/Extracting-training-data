@@ -1,0 +1,3 @@
+# Used with ``pip install -c ...`` so dependency resolution never picks PyYAML 5.x sdists
+# (broken under modern setuptools in isolated build envs).
+PyYAML>=6.0.1
