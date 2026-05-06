@@ -50,6 +50,10 @@ def load_causal_lm(
     except TypeError:
         kwargs.pop("attn_implementation", None)
         model = AutoModelForCausalLM.from_pretrained(model_name, **kwargs)
+    # Compatibility shim for some remote-code models (e.g., older OLMo classes)
+    # that do not define this attribute expected by newer generation helpers.
+    if not hasattr(model, "all_tied_weights_keys"):
+        model.all_tied_weights_keys = []
     model.to(device)
     model.eval()
     if hasattr(model.config, "pad_token_id") and model.config.pad_token_id is None:
