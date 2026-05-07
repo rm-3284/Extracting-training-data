@@ -109,10 +109,6 @@ else:
 PY
 fi
 
-if [[ "${RUN_KEY}" == dclm* ]]; then
-  python -c "import open_lm.hf; print('open_lm.hf OK')"
-fi
-
 python -m mia_eval.run_carlini_extraction_batch \
   --config "${CONFIG}" \
   --manifest-path "${MANIFEST_PATH}" \

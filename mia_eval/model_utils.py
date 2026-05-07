@@ -6,7 +6,7 @@ import os
 from typing import Any, Dict, Optional, Tuple
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel
 
 from mia_eval.openlm_hf_loader import ensure_openlm_hf_registered, is_openlm_load_error
 
@@ -37,6 +37,22 @@ def _from_pretrained_causal_lm(model_name: str, kwargs: Dict[str, Any]) -> Any:
         return AutoModelForCausalLM.from_pretrained(model_name, **kw2)
 
 
+def _ensure_tied_weights_attr_for_compat(model_name: str) -> None:
+    """Backfill `all_tied_weights_keys` for older model classes before load."""
+    if not hasattr(PreTrainedModel, "all_tied_weights_keys"):
+        PreTrainedModel.all_tied_weights_keys = []
+    if "olmo" in model_name.lower():
+        try:
+            import hf_olmo  # noqa: F401
+            from hf_olmo import OLMoForCausalLM
+
+            if not hasattr(OLMoForCausalLM, "all_tied_weights_keys"):
+                OLMoForCausalLM.all_tied_weights_keys = []
+        except Exception:
+            # If hf_olmo is unavailable or API differs, keep generic base-class shim.
+            pass
+
+
 def load_causal_lm(
     model_name: str,
     tokenizer_name: Optional[str],
@@ -52,7 +68,15 @@ def load_causal_lm(
         tok_kwargs["token"] = hf_token
 
     def _build_tokenizer() -> Any:
-        tok = AutoTokenizer.from_pretrained(tok_name, **tok_kwargs)
+        try:
+            tok = AutoTokenizer.from_pretrained(tok_name, **tok_kwargs)
+        except ValueError as e:
+            msg = str(e).lower()
+            if "backend tokenizer" in msg or "sentencepiece" in msg or "tiktoken" in msg:
+                # Some repos (e.g., Dolly mirrors) only provide slow tokenizer assets.
+                tok = AutoTokenizer.from_pretrained(tok_name, use_fast=False, **tok_kwargs)
+            else:
+                raise
         tok.padding_side = "left"
         if tok.pad_token is None:
             tok.pad_token = tok.eos_token
@@ -67,6 +91,8 @@ def load_causal_lm(
         kwargs["torch_dtype"] = torch_dtype
     if attn_implementation:
         kwargs["attn_implementation"] = attn_implementation
+
+    _ensure_tied_weights_attr_for_compat(model_name)
 
     try:
         model = _from_pretrained_causal_lm(model_name, kwargs)
