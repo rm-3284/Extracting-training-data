@@ -38,19 +38,36 @@ def _from_pretrained_causal_lm(model_name: str, kwargs: Dict[str, Any]) -> Any:
 
 
 def _ensure_tied_weights_attr_for_compat(model_name: str) -> None:
-    """Backfill `all_tied_weights_keys` for older model classes before load."""
+    """Backfill `all_tied_weights_keys` for older model classes before load.
+
+    Newer Transformers treats this as a mapping and calls ``.keys()``; some remote
+    checkpoints expose a list (or nothing), which raises AttributeError.
+    """
     if not hasattr(PreTrainedModel, "all_tied_weights_keys"):
-        PreTrainedModel.all_tied_weights_keys = []
+        PreTrainedModel.all_tied_weights_keys = {}
     if "olmo" in model_name.lower():
         try:
             import hf_olmo  # noqa: F401
             from hf_olmo import OLMoForCausalLM
 
             if not hasattr(OLMoForCausalLM, "all_tied_weights_keys"):
-                OLMoForCausalLM.all_tied_weights_keys = []
+                OLMoForCausalLM.all_tied_weights_keys = {}
+            elif isinstance(OLMoForCausalLM.all_tied_weights_keys, list):
+                OLMoForCausalLM.all_tied_weights_keys = {}
         except Exception:
             # If hf_olmo is unavailable or API differs, keep generic base-class shim.
             pass
+
+
+def _normalize_all_tied_weights_keys(model: Any) -> None:
+    """Ensure instance and class use a dict (Transformers >= ~4.48 expects mapping semantics)."""
+    for target in (model, model.__class__):
+        if not hasattr(target, "all_tied_weights_keys"):
+            setattr(target, "all_tied_weights_keys", {})
+        else:
+            v = getattr(target, "all_tied_weights_keys")
+            if isinstance(v, list):
+                setattr(target, "all_tied_weights_keys", {})
 
 
 def load_causal_lm(
@@ -67,14 +84,35 @@ def load_causal_lm(
     if hf_token:
         tok_kwargs["token"] = hf_token
 
+    def _is_tokenizer_backend_fail(exc: BaseException) -> bool:
+        msg = str(exc).lower()
+        return any(
+            needle in msg
+            for needle in (
+                "backend tokenizer",
+                "instantiate the backend",
+                "couldn't instantiate",
+                "could not instantiate",
+                "sentencepiece",
+                "tiktoken",
+                "convert a slow tokenizer",
+            )
+        )
+
     def _build_tokenizer() -> Any:
+        # GPT-NeoX–style checkpoints on HF often lack fast-tokenizer assets; default fast load then
+        # tries to convert the slow tokenizer and requires sentencepiece/tiktoken even when slow
+        # would work. Dolly mirrors are a common case.
+        kw = dict(tok_kwargs)
+        if "dolly" in tok_name.lower():
+            kw["use_fast"] = False
         try:
-            tok = AutoTokenizer.from_pretrained(tok_name, **tok_kwargs)
-        except ValueError as e:
-            msg = str(e).lower()
-            if "backend tokenizer" in msg or "sentencepiece" in msg or "tiktoken" in msg:
-                # Some repos (e.g., Dolly mirrors) only provide slow tokenizer assets.
-                tok = AutoTokenizer.from_pretrained(tok_name, use_fast=False, **tok_kwargs)
+            tok = AutoTokenizer.from_pretrained(tok_name, **kw)
+        except Exception as e:
+            if kw.get("use_fast") is not False and _is_tokenizer_backend_fail(e):
+                tok = AutoTokenizer.from_pretrained(
+                    tok_name, use_fast=False, **tok_kwargs
+                )
             else:
                 raise
         tok.padding_side = "left"
@@ -103,13 +141,7 @@ def load_causal_lm(
             model = _from_pretrained_causal_lm(model_name, kwargs)
         else:
             raise
-    # Compatibility shim for some remote-code models (e.g., older OLMo classes)
-    # that do not define this attribute expected by newer generation helpers.
-    # Set on both instance and class, since some code paths inspect class attributes.
-    if not hasattr(model, "all_tied_weights_keys"):
-        model.all_tied_weights_keys = []
-    if not hasattr(model.__class__, "all_tied_weights_keys"):
-        model.__class__.all_tied_weights_keys = []
+    _normalize_all_tied_weights_keys(model)
     model.to(device)
     model.eval()
     if hasattr(model.config, "pad_token_id") and model.config.pad_token_id is None:
