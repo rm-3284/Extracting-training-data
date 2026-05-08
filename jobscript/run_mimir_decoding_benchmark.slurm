@@ -28,7 +28,7 @@
 #   sbatch --export=ALL,HF_TOKEN="$HF_TOKEN" jobscript/run_mimir_decoding_benchmark.slurm
 #
 # Optional environment overrides (all optional):
-#   CONDA_ENV         conda env name (default: base)
+#   CONDA_ENV         conda env with torch + transformers (required); NOT cluster `base` unless it has torch
 #   N_EXAMPLES        --n-examples (default: 50)
 #   BENCH_OUTPUT      --output JSON path (default: logs/${SLURM_JOB_ID}/mimir_bench.json)
 #   SKIP_SLOW         set to 1 to pass --skip-slow
@@ -49,12 +49,34 @@ export PROJECT_ROOT="${SLURM_SUBMIT_DIR:-/n/fs/vision-mix/rm4411/Extracting-trai
 # Writable temp (cluster may set TMPDIR=/scratch/... which does not exist for every user).
 export TMP_BASE="${TMP_BASE:-${PROJECT_ROOT}/tmp}"
 mkdir -p "${TMP_BASE}"
-export TMPDIR="${TMPDIR:-${TMP_BASE}}"
+# Slurm may export TMPDIR=/scratch/... before the script runs; override if missing/unwritable.
+if [[ -z "${TMPDIR:-}" || ! -d "${TMPDIR}" || ! -w "${TMPDIR}" ]]; then
+  export TMPDIR="${TMP_BASE}"
+fi
+mkdir -p "${TMPDIR}"
 
 # shellcheck source=jobscript/_slurm_prologue.sh
 source "${PROJECT_ROOT}/jobscript/_slurm_prologue.sh"
 conda activate "${CONDA_ENV:-base}"
 export AUTO_INSTALL_DEPS="${AUTO_INSTALL_DEPS:-1}"
+
+# Benchmark loads PyTorch / transformers; cluster `base` often lacks torch.
+python - <<'PY'
+import sys
+
+try:
+    import torch
+
+    print("torch:", torch.__version__, "cuda:", torch.cuda.is_available())
+except ImportError:
+    print(
+        "ERROR: No module named 'torch' in this conda env.\n"
+        "Submit with an env that has PyTorch, e.g.\n"
+        "  sbatch --export=ALL,HF_TOKEN=\"$HF_TOKEN\",CONDA_ENV=carlini jobscript/run_mimir_decoding_benchmark.slurm",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+PY
 # Avoid mixing ~/.local site-packages with conda env packages (causes hub/datasets skew).
 export PYTHONNOUSERSITE=1
 unset PYTHONHOME || true
@@ -92,46 +114,7 @@ export PIP_OVERLAY_DIR="${PIP_OVERLAY_DIR:-${PROJECT_ROOT}/.slurm_pip_overlay}"
 export PIP_TARGET="${PIP_OVERLAY_DIR}/${JOB_TAG}"
 rm -rf "${PIP_TARGET}"
 mkdir -p "${PIP_TARGET}"
-if [[ "${AUTO_INSTALL_DEPS:-1}" == "1" ]]; then
-python - <<'PY'
-import os
-import subprocess
-import sys
-
-pip_target = os.environ["PIP_TARGET"]
-os.makedirs(pip_target, exist_ok=True)
-
-
-def have_hub_commitinfo():
-    try:
-        import huggingface_hub  # noqa: F401
-        from huggingface_hub import CommitInfo  # noqa: F401
-        return True
-    except Exception:
-        return False
-
-
-if not have_hub_commitinfo():
-    print("huggingface_hub missing/incompatible; installing minimal overlay with pip --target")
-    print("  target:", pip_target)
-    print("  python:", sys.executable)
-    subprocess.check_call(
-        [
-            sys.executable,
-            "-m",
-            "pip",
-            "install",
-            "-U",
-            "--no-deps",
-            "--target",
-            pip_target,
-            "huggingface_hub>=0.23,<1.0",
-        ]
-    )
-PY
-  # Prefer packages in per-job overlay over read-only/shared site-packages.
-  export PYTHONPATH="${PIP_TARGET}${PYTHONPATH:+:${PYTHONPATH}}"
-fi
+# Do NOT prepend PYTHONPATH until deps resolve; overlay numpy 2.x breaks conda numexpr/bottleneck.
 
 echo "--- Python / pip diagnostics (same interpreter the job uses) ---"
 echo "CONDA_DEFAULT_ENV=${CONDA_DEFAULT_ENV:-}"
@@ -139,39 +122,136 @@ echo "python -m pip: $(python -m pip --version 2>/dev/null || echo 'missing')"
 python -m pip show datasets 2>/dev/null | head -5 || echo "(python -m pip show datasets: not installed for THIS python)"
 echo "---"
 
+if [[ "${AUTO_INSTALL_DEPS:-1}" == "1" ]]; then
 python - <<'PY'
+"""Resolve huggingface_hub + datasets without mixing NumPy 2 overlay with conda-built extensions."""
 import os
 import subprocess
 import sys
 
+pip_target = os.environ["PIP_TARGET"]
+os.makedirs(pip_target, exist_ok=True)
+
 print("Python executable:", sys.executable)
 print("Python version:", sys.version.split()[0])
 print("PYTHONNOUSERSITE:", os.environ.get("PYTHONNOUSERSITE"))
-print("First sys.path entries:", sys.path[:5])
-
-try:
-    import huggingface_hub as hfh
-    print("huggingface_hub:", getattr(hfh, "__version__", "unknown"), "from", getattr(hfh, "__file__", "unknown"))
-except Exception as e:
-    raise SystemExit(f"Failed importing huggingface_hub: {e}")
+print("PIP_TARGET:", pip_target)
 
 
-def import_datasets():
+def have_hub_commitinfo():
+    try:
+        from huggingface_hub import CommitInfo  # noqa: F401
+
+        return True
+    except Exception:
+        return False
+
+
+def import_datasets_clean():
     import datasets as ds
 
     return ds
 
 
-try:
-    ds = import_datasets()
-    print("datasets:", getattr(ds, "__version__", "unknown"), "from", getattr(ds, "__file__", "unknown"))
-except Exception as e:
+def install_hub_overlay():
+    print("Installing huggingface_hub into overlay (--no-deps)")
+    subprocess.check_call(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "-q",
+            "-U",
+            "--no-deps",
+            "--target",
+            pip_target,
+            "huggingface_hub>=0.23,<1.0",
+        ]
+    )
+
+
+def install_datasets_overlay_numpy1():
+    """
+    Pin NumPy < 2 so pandas does not pull NumPy 2 and then import conda numexpr/bottleneck
+    built for NumPy 1.x (AttributeError: _ARRAY_API not found).
+    Also install numexpr/bottleneck into the overlay against the same NumPy.
+    """
+    print(
+        "Installing datasets stack into overlay with numpy<2 (avoids conda C-extension mismatch)"
+    )
+    subprocess.check_call(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "-q",
+            "-U",
+            "--target",
+            pip_target,
+            "numpy>=1.26,<2",
+            "pandas>=2.0.2,<2.3",
+            "pyarrow>=14,<21",
+            "numexpr>=2.8.4",
+            "bottleneck>=1.3.7",
+            "datasets>=2.19,<4",
+        ]
+    )
+
+
+def try_imports_with_overlay():
+    sys.path.insert(0, pip_target)
+    if not have_hub_commitinfo():
+        return False
+    import huggingface_hub as hfh
+
+    print(
+        "huggingface_hub:",
+        getattr(hfh, "__version__", "?"),
+        "from",
+        getattr(hfh, "__file__", "?"),
+    )
+    ds = import_datasets_clean()
+    print(
+        "datasets:",
+        getattr(ds, "__version__", "?"),
+        "from",
+        getattr(ds, "__file__", "?"),
+    )
+    return True
+
+
+# --- huggingface_hub
+if not have_hub_commitinfo():
     if os.environ.get("AUTO_INSTALL_DEPS", "1") != "1":
-        raise SystemExit(
-            "Failed importing datasets. Fix: conda activate YOUR_ENV && python -m pip install datasets\n"
-            f"Underlying error: {e}"
-        )
-    print("datasets not importable; installing into active env with: python -m pip install -U 'datasets>=2.19'")
+        raise SystemExit("huggingface_hub missing and AUTO_INSTALL_DEPS=0")
+    install_hub_overlay()
+
+sys.path.insert(0, pip_target)
+import huggingface_hub as hfh
+
+print(
+    "huggingface_hub:",
+    getattr(hfh, "__version__", "?"),
+    "from",
+    getattr(hfh, "__file__", "?"),
+)
+
+# --- datasets (prefer conda env; overlay only if needed, with numpy pin)
+try:
+    ds = import_datasets_clean()
+    print(
+        "datasets:",
+        getattr(ds, "__version__", "?"),
+        "from",
+        getattr(ds, "__file__", "?"),
+    )
+except Exception as first_err:
+    if os.environ.get("AUTO_INSTALL_DEPS", "1") != "1":
+        raise SystemExit(f"datasets missing: {first_err}")
+    print("datasets import failed:", first_err)
+    print("Trying: python -m pip install -U 'datasets>=2.19' into active env ...")
     try:
         subprocess.check_call(
             [
@@ -179,29 +259,58 @@ except Exception as e:
                 "-m",
                 "pip",
                 "install",
+                "-q",
                 "-U",
-                "datasets>=2.19",
+                "datasets>=2.19,<4",
             ]
         )
-    except subprocess.CalledProcessError as pip_exc:
-        print("In-env pip install failed (read-only env?). Trying --target overlay ...", file=sys.stderr)
-        pip_target = os.environ["PIP_TARGET"]
-        subprocess.check_call(
-            [
-                sys.executable,
-                "-m",
-                "pip",
-                "install",
-                "-U",
-                "--target",
-                pip_target,
-                "datasets>=2.19",
-            ]
+        ds = import_datasets_clean()
+        print(
+            "datasets:",
+            getattr(ds, "__version__", "?"),
+            "from",
+            getattr(ds, "__file__", "?"),
         )
-        if pip_target not in sys.path:
-            sys.path.insert(0, pip_target)
-    ds = import_datasets()
-    print("datasets:", getattr(ds, "__version__", "unknown"), "from", getattr(ds, "__file__", "unknown"))
+    except Exception as env_err:
+        print("In-env install failed:", env_err)
+        install_datasets_overlay_numpy1()
+        if not try_imports_with_overlay():
+            raise SystemExit("datasets still not importable after overlay install")
+PY
+  # Only prepend overlay if something was installed there (avoid masking conda with an empty dir).
+  if [[ -d "${PIP_TARGET}/huggingface_hub" || -d "${PIP_TARGET}/datasets" ]]; then
+    export PYTHONPATH="${PIP_TARGET}${PYTHONPATH:+:${PYTHONPATH}}"
+  fi
+fi
+
+python - <<'PY'
+import os
+import sys
+
+if os.environ.get("AUTO_INSTALL_DEPS", "1") != "1":
+    try:
+        import huggingface_hub  # noqa: F401
+        import datasets  # noqa: F401
+        import torch  # noqa: F401
+    except ImportError as e:
+        raise SystemExit(f"AUTO_INSTALL_DEPS=0 but missing dependency: {e}")
+    print("AUTO_INSTALL_DEPS=0: huggingface_hub, datasets, torch OK")
+    sys.exit(0)
+
+import huggingface_hub as hfh
+
+print("smoke: huggingface_hub OK", getattr(hfh, "__version__", "?"))
+
+import datasets as ds
+
+print("smoke: datasets OK", getattr(ds, "__version__", "?"))
+
+try:
+    import torch
+except ImportError:
+    raise SystemExit("torch missing at smoke test")
+
+print("smoke: torch OK", torch.__version__)
 PY
 echo "Running: python memorization_detection/run_mimir_decoding_benchmark.py ${EXTRA[*]} ${BENCH_ARGS:-}"
 
