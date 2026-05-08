@@ -160,27 +160,79 @@ def _ensure_config_generation_attrs(model: Any) -> None:
             pass
 
 
-def _ensure_olmo_forward_kwarg_compat(model: Any) -> None:
-    """Drop kwargs newer ``generate`` passes that older hf_olmo ``forward`` rejects."""
+def _ensure_olmo_generate_signature_compat(model: Any) -> None:
+    """hf_olmo + newer ``generate``: forward must *name* args ``_validate_model_kwargs`` allows (e.g. ``attention_mask``)."""
     cls = model.__class__
     if cls.__name__ != "OLMoForCausalLM":
         return
-    if getattr(cls, "_mia_eval_forward_kwarg_filtered", False):
+    if getattr(cls, "_mia_eval_olmo_generate_sig_patched", False):
         return
     import inspect
 
+    def _call_filtered(fn: Any, self: Any, /, *args: Any, **kwargs: Any) -> Any:
+        sig = inspect.signature(fn)
+        if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
+            return fn(self, *args, **kwargs)
+        allowed = {n for n in sig.parameters if n != "self"}
+        return fn(self, *args, **{k: v for k, v in kwargs.items() if k in allowed})
+
     _orig_forward = cls.forward
 
-    def _forward(self, *args, **kwargs):
-        sig = inspect.signature(_orig_forward)
-        if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
-            return _orig_forward(self, *args, **kwargs)
-        allowed = {n for n in sig.parameters if n != "self"}
-        kwargs = {k: v for k, v in kwargs.items() if k in allowed}
-        return _orig_forward(self, *args, **kwargs)
+    def _forward(
+        self,
+        *args: Any,
+        attention_mask: Any = None,
+        cache_position: Any = None,
+        position_ids: Any = None,
+        past_key_values: Any = None,
+        **kwargs: Any,
+    ) -> Any:
+        merged = dict(kwargs)
+        for name, val in (
+            ("attention_mask", attention_mask),
+            ("cache_position", cache_position),
+            ("position_ids", position_ids),
+            ("past_key_values", past_key_values),
+        ):
+            if val is not None:
+                merged[name] = val
+        return _call_filtered(_orig_forward, self, *args, **merged)
 
     cls.forward = _forward
-    cls._mia_eval_forward_kwarg_filtered = True
+
+    _orig_prep = getattr(cls, "prepare_inputs_for_generation", None)
+    if _orig_prep is not None:
+        try:
+            prep_names = set(inspect.signature(_orig_prep).parameters)
+        except (TypeError, ValueError):
+            prep_names = set()
+        if (
+            "attention_mask" not in prep_names
+            and "kwargs" not in prep_names
+            and "model_kwargs" not in prep_names
+        ):
+
+            def _prep(
+                self,
+                *args: Any,
+                attention_mask: Any = None,
+                cache_position: Any = None,
+                position_ids: Any = None,
+                **kwargs: Any,
+            ) -> Any:
+                merged = dict(kwargs)
+                for name, val in (
+                    ("attention_mask", attention_mask),
+                    ("cache_position", cache_position),
+                    ("position_ids", position_ids),
+                ):
+                    if val is not None:
+                        merged[name] = val
+                return _call_filtered(_orig_prep, self, *args, **merged)
+
+            cls.prepare_inputs_for_generation = _prep
+
+    cls._mia_eval_olmo_generate_sig_patched = True
 
 
 def _ensure_tie_weights_signature_compat(model: Any) -> None:
@@ -284,7 +336,7 @@ def load_causal_lm(
     _ensure_dynamic_cache_flag(model)
     _ensure_tie_weights_signature_compat(model)
     _ensure_generation_methods(model)
-    _ensure_olmo_forward_kwarg_compat(model)
+    _ensure_olmo_generate_signature_compat(model)
     _ensure_config_generation_attrs(model)
     model.to(device)
     model.eval()
