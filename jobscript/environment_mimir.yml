@@ -1,0 +1,25 @@
+# Optional alternative to jobscript/setup_mimir_conda_env.sh (pip-based).
+# Some clusters solve this poorly; prefer the shell script if conda fails.
+#
+#   conda env create -f jobscript/environment_mimir.yml -p /path/to/mimir_bench
+#
+name: mimir_bench
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - numpy>=1.26,<2
+  - pytorch>=2.2
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=12.1
+  - pip:
+    - transformers>=4.36,<5
+    - datasets>=2.19,<4
+    - accelerate>=0.26
+    - huggingface_hub>=0.23,<1
+    - safetensors
+    - sentencepiece

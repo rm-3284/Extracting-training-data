@@ -61,7 +61,13 @@ python memorization_detection/run_mimir_decoding_benchmark.py --n-examples 50 --
 
 Other useful flags: `--models ...`, `--seed 0`, `--verbose`, **`--top-k`** (default **20**), **`--gate-gamma`** (sigmoid gate), **`--risk-every`** (fast prefix refresh interval).
 
-**Slurm:** see [`../jobscript/run_mimir_decoding_benchmark.slurm`](../jobscript/run_mimir_decoding_benchmark.slurm) (GPU, conda via `_slurm_prologue.sh`, `HF_TOKEN`, optional `N_EXAMPLES` / `SKIP_SLOW` / `BENCH_OUTPUT`).
+**Slurm:** One-time on a login node (with network), create the dedicated conda env:
+
+```bash
+bash jobscript/setup_mimir_conda_env.sh
+```
+
+Default env path: `.conda/envs/mimir_bench` under the repo (gitignored). Then submit [`../jobscript/run_mimir_decoding_benchmark.slurm`](../jobscript/run_mimir_decoding_benchmark.slurm) with `HF_TOKEN` set; the job activates that env automatically unless you pass `CONDA_ENV` or `MIMIR_ENV_PREFIX`. Optional: [`../jobscript/environment_mimir.yml`](../jobscript/environment_mimir.yml) if you prefer `conda env create -f` instead of the setup script.
 
 ### Changing the model
 

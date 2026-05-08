@@ -15,6 +15,9 @@
 # memorization_detection/run_mimir_decoding_benchmark.py).
 #
 # Prerequisites:
+#   - One-time: create the dedicated env (login node, network):
+#       bash jobscript/setup_mimir_conda_env.sh
+#     Default install path: ${PROJECT_ROOT}/.conda/envs/mimir_bench
 #   - HF_TOKEN with MIMIR access (do not put the token in this file).
 #   - Edit --chdir and PROJECT_ROOT below if your clone path differs.
 #   - Edit --partition / --time / --mem for your cluster (e.g. mig, pli-lc).
@@ -28,7 +31,8 @@
 #   sbatch --export=ALL,HF_TOKEN="$HF_TOKEN" jobscript/run_mimir_decoding_benchmark.slurm
 #
 # Optional environment overrides (all optional):
-#   CONDA_ENV         conda env with torch + transformers (required); NOT cluster `base` unless it has torch
+#   CONDA_ENV         explicit conda env name OR path (overrides default mimir_bench path)
+#   MIMIR_ENV_PREFIX  path to env created by setup_mimir_conda_env.sh (default: ${PROJECT_ROOT}/.conda/envs/mimir_bench)
 #   N_EXAMPLES        --n-examples (default: 50)
 #   BENCH_OUTPUT      --output JSON path (default: logs/${SLURM_JOB_ID}/mimir_bench.json)
 #   SKIP_SLOW         set to 1 to pass --skip-slow
@@ -57,10 +61,27 @@ mkdir -p "${TMPDIR}"
 
 # shellcheck source=jobscript/_slurm_prologue.sh
 source "${PROJECT_ROOT}/jobscript/_slurm_prologue.sh"
-conda activate "${CONDA_ENV:-base}"
-export AUTO_INSTALL_DEPS="${AUTO_INSTALL_DEPS:-1}"
 
-# Benchmark loads PyTorch / transformers; cluster `base` often lacks torch.
+export MIMIR_ENV_PREFIX="${MIMIR_ENV_PREFIX:-${PROJECT_ROOT}/.conda/envs/mimir_bench}"
+if [[ -n "${CONDA_ENV:-}" ]]; then
+  conda activate "${CONDA_ENV}"
+elif [[ -x "${MIMIR_ENV_PREFIX}/bin/python" ]]; then
+  conda activate "${MIMIR_ENV_PREFIX}"
+else
+  echo "ERROR: No conda env with PyTorch stack for this benchmark." >&2
+  echo "Create it once on a login node (with network):" >&2
+  echo "  cd ${PROJECT_ROOT} && bash jobscript/setup_mimir_conda_env.sh" >&2
+  echo "Or submit with an existing env:" >&2
+  echo "  sbatch --export=ALL,HF_TOKEN=\"\$HF_TOKEN\",CONDA_ENV=carlini jobscript/run_mimir_decoding_benchmark.slurm" >&2
+  exit 1
+fi
+
+export AUTO_INSTALL_DEPS="${AUTO_INSTALL_DEPS:-1}"
+# Avoid mixing ~/.local site-packages with conda env packages (causes hub/datasets skew).
+export PYTHONNOUSERSITE=1
+unset PYTHONHOME || true
+
+# Benchmark loads PyTorch / transformers
 python - <<'PY'
 import sys
 
@@ -70,16 +91,11 @@ try:
     print("torch:", torch.__version__, "cuda:", torch.cuda.is_available())
 except ImportError:
     print(
-        "ERROR: No module named 'torch' in this conda env.\n"
-        "Submit with an env that has PyTorch, e.g.\n"
-        "  sbatch --export=ALL,HF_TOKEN=\"$HF_TOKEN\",CONDA_ENV=carlini jobscript/run_mimir_decoding_benchmark.slurm",
+        "ERROR: No module named 'torch' in the activated conda env.",
         file=sys.stderr,
     )
     sys.exit(1)
 PY
-# Avoid mixing ~/.local site-packages with conda env packages (causes hub/datasets skew).
-export PYTHONNOUSERSITE=1
-unset PYTHONHOME || true
 
 JOB_TAG="${SLURM_JOB_ID:-manual}"
 mkdir -p "logs/${JOB_TAG}"
