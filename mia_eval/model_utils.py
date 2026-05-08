@@ -31,7 +31,21 @@ def torch_dtype_from_str(s: Optional[str]) -> Optional[torch.dtype]:
 
 
 def _dtype_kwargs_for_from_pretrained(torch_dtype: torch.dtype) -> Dict[str, Any]:
-    """Prefer ``dtype`` (Transformers 5+) over deprecated ``torch_dtype``."""
+    """Prefer ``dtype`` (Transformers 5+) over deprecated ``torch_dtype``.
+
+    TF 5 ``from_pretrained`` often hides ``dtype`` behind ``**kwargs``, so signature
+    inspection alone misses it and would keep emitting deprecation warnings.
+    """
+    try:
+        import transformers
+
+        ver = transformers.__version__.split("+")[0].split("-")[0]
+        major_s = "".join(c for c in ver.split(".")[0] if c.isdigit())
+        major = int(major_s or "0")
+        if major >= 5:
+            return {"dtype": torch_dtype}
+    except Exception:
+        pass
     try:
         sig = inspect.signature(AutoModelForCausalLM.from_pretrained)
         if "dtype" in sig.parameters:
@@ -285,7 +299,11 @@ def load_causal_lm(
 ) -> Tuple[Any, Any]:
     tok_name = tokenizer_name or model_name
     hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN")
-    tok_kwargs: Dict[str, Any] = {"trust_remote_code": True}
+    tok_kwargs: Dict[str, Any] = {
+        "trust_remote_code": True,
+        # Avoid Transformers warning for BPE (e.g. OLMo fast tokenizer).
+        "clean_up_tokenization_spaces": False,
+    }
     if hf_token:
         tok_kwargs["token"] = hf_token
 

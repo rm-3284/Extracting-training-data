@@ -32,8 +32,17 @@
 # Transformers). One-time install: see ``mia_eval/openlm_hf_loader.py``.
 #
 # Edit #SBATCH --chdir= to your clone if different.
+#
+# If Slurm logs ``Unable to create TMPDIR [/scratch/...]`` once per job, that is the scheduler;
+# either create that directory or ``unset TMPDIR`` before ``sbatch`` so Slurm picks /tmp.
 
 set -euo pipefail
+
+# Runtime temp files (Python, HF cache staging): avoid inherited TMPDIR pointing at a missing scratch path.
+if [[ -z "${TMPDIR:-}" ]] || [[ ! -d "${TMPDIR}" ]]; then
+  export TMPDIR="/tmp/${USER}_carlini_tmp"
+fi
+mkdir -p "${TMPDIR}"
 
 export PROJECT_ROOT="${SLURM_SUBMIT_DIR:-$(pwd)}"
 # shellcheck source=jobscript/_slurm_prologue.sh
@@ -46,12 +55,6 @@ export HF_HOME="${HF_HOME:-/n/fs/vision-mix/rm4411/huggingface}"
 export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-$HF_HOME}"
 export TORCH_HOME="${TORCH_HOME:-/n/fs/vision-mix/rm4411/torch}"
 export XDG_CACHE_HOME="${XDG_CACHE_HOME:-/n/fs/vision-mix/rm4411/cache}"
-# Prefer node-local /tmp if TMPDIR points to a missing scratch path.
-if [[ -n "${TMPDIR:-}" ]] && [[ ! -d "${TMPDIR}" ]]; then
-  echo "TMPDIR missing (${TMPDIR}); falling back to /tmp/${USER}_tmp"
-  export TMPDIR="/tmp/${USER}_tmp"
-fi
-mkdir -p "${TMPDIR:-/tmp/${USER}_tmp}" || export TMPDIR="/tmp"
 
 RUN_KEYS=(
   olmo2_7b_base
