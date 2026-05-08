@@ -54,6 +54,21 @@ def _ensure_tied_weights_attr_for_compat(model_name: str) -> None:
                 OLMoForCausalLM.all_tied_weights_keys = {}
             elif isinstance(OLMoForCausalLM.all_tied_weights_keys, list):
                 OLMoForCausalLM.all_tied_weights_keys = {}
+            # Newer Transformers may call tie_weights(missing_keys=...).
+            # Older hf_olmo implementations expose tie_weights(self) only.
+            try:
+                import inspect
+
+                sig = inspect.signature(OLMoForCausalLM.tie_weights)
+                if "missing_keys" not in sig.parameters:
+                    _orig_tie_weights = OLMoForCausalLM.tie_weights
+
+                    def _tie_weights_compat(self, *args, **kwargs):
+                        return _orig_tie_weights(self)
+
+                    OLMoForCausalLM.tie_weights = _tie_weights_compat
+            except Exception:
+                pass
         except Exception:
             # If hf_olmo is unavailable or API differs, keep generic base-class shim.
             pass

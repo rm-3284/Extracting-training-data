@@ -111,6 +111,7 @@ carlini_runs:
   - run_key: dolly_v2_12b
     project: Pythia
     hf_model_id: seungwon12/dolly
+    tokenizer: EleutherAI/gpt-neox-20b
     variant: post_train
     post_training: "SFT (Databricks-Dolly)"
     torch_dtype: float16
