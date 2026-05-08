@@ -160,9 +160,9 @@ if [[ -z "${HF_TOKEN:-}" ]]; then
   exit 1
 fi
 
-# Cache on shared FS (override with HF_HOME / TRANSFORMERS_CACHE if you prefer scratch)
+# Cache on shared FS (override HF_HOME if you prefer another path)
+# Hugging Face cache (HF_HOME covers transformers + hub; avoid TRANSFORMERS_CACHE — deprecated in transformers v5 roadmap)
 export HF_HOME="${HF_HOME:-${PROJECT_ROOT}/.cache/huggingface}"
-export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-${HF_HOME}}"
 export TORCH_HOME="${TORCH_HOME:-${PROJECT_ROOT}/.cache/torch}"
 export XDG_CACHE_HOME="${XDG_CACHE_HOME:-${PROJECT_ROOT}/.cache}"
 mkdir -p "${HF_HOME}" "${TORCH_HOME}" "${XDG_CACHE_HOME}"
