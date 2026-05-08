@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --time=24:00:00
+#SBATCH --time=12:00:00
 #SBATCH --partition=all
 #SBATCH --output=logs/mimir_bench_%j.out
 #SBATCH --error=logs/mimir_bench_%j.err
@@ -33,6 +33,8 @@
 #   BENCH_OUTPUT      --output JSON path (default: logs/${SLURM_JOB_ID}/mimir_bench.json)
 #   SKIP_SLOW         set to 1 to pass --skip-slow
 #   AUTO_INSTALL_DEPS set to 0 to disable auto pip install when missing
+#                     (plain `pip show` may be a different Python than `python` after conda activate;
+#                      always use: conda activate ENV && python -m pip show datasets)
 #   PIP_OVERLAY_DIR   writable dir for per-job overlay installs (default: ${PROJECT_ROOT}/.slurm_pip_overlay)
 #   TMP_BASE          temp dir Slurm/prologue use (default: ${PROJECT_ROOT}/tmp — avoids /scratch/... if missing)
 #   BENCH_ARGS        optional extra CLI tokens (unquoted expansion), e.g.:
@@ -52,6 +54,7 @@ export TMPDIR="${TMPDIR:-${TMP_BASE}}"
 # shellcheck source=jobscript/_slurm_prologue.sh
 source "${PROJECT_ROOT}/jobscript/_slurm_prologue.sh"
 conda activate "${CONDA_ENV:-base}"
+export AUTO_INSTALL_DEPS="${AUTO_INSTALL_DEPS:-1}"
 # Avoid mixing ~/.local site-packages with conda env packages (causes hub/datasets skew).
 export PYTHONNOUSERSITE=1
 unset PYTHONHOME || true
@@ -130,20 +133,75 @@ PY
   export PYTHONPATH="${PIP_TARGET}${PYTHONPATH:+:${PYTHONPATH}}"
 fi
 
+echo "--- Python / pip diagnostics (same interpreter the job uses) ---"
+echo "CONDA_DEFAULT_ENV=${CONDA_DEFAULT_ENV:-}"
+echo "python -m pip: $(python -m pip --version 2>/dev/null || echo 'missing')"
+python -m pip show datasets 2>/dev/null | head -5 || echo "(python -m pip show datasets: not installed for THIS python)"
+echo "---"
+
 python - <<'PY'
+import os
+import subprocess
 import sys
+
 print("Python executable:", sys.executable)
 print("Python version:", sys.version.split()[0])
+print("PYTHONNOUSERSITE:", os.environ.get("PYTHONNOUSERSITE"))
+print("First sys.path entries:", sys.path[:5])
+
 try:
     import huggingface_hub as hfh
     print("huggingface_hub:", getattr(hfh, "__version__", "unknown"), "from", getattr(hfh, "__file__", "unknown"))
 except Exception as e:
     raise SystemExit(f"Failed importing huggingface_hub: {e}")
-try:
+
+
+def import_datasets():
     import datasets as ds
+
+    return ds
+
+
+try:
+    ds = import_datasets()
     print("datasets:", getattr(ds, "__version__", "unknown"), "from", getattr(ds, "__file__", "unknown"))
 except Exception as e:
-    raise SystemExit(f"Failed importing datasets from active env. Use CONDA_ENV with datasets installed. Error: {e}")
+    if os.environ.get("AUTO_INSTALL_DEPS", "1") != "1":
+        raise SystemExit(
+            "Failed importing datasets. Fix: conda activate YOUR_ENV && python -m pip install datasets\n"
+            f"Underlying error: {e}"
+        )
+    print("datasets not importable; installing into active env with: python -m pip install -U 'datasets>=2.19'")
+    try:
+        subprocess.check_call(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "-U",
+                "datasets>=2.19",
+            ]
+        )
+    except subprocess.CalledProcessError as pip_exc:
+        print("In-env pip install failed (read-only env?). Trying --target overlay ...", file=sys.stderr)
+        pip_target = os.environ["PIP_TARGET"]
+        subprocess.check_call(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "-U",
+                "--target",
+                pip_target,
+                "datasets>=2.19",
+            ]
+        )
+        if pip_target not in sys.path:
+            sys.path.insert(0, pip_target)
+    ds = import_datasets()
+    print("datasets:", getattr(ds, "__version__", "unknown"), "from", getattr(ds, "__file__", "unknown"))
 PY
 echo "Running: python memorization_detection/run_mimir_decoding_benchmark.py ${EXTRA[*]} ${BENCH_ARGS:-}"
 
