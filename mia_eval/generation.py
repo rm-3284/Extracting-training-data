@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import torch
 
@@ -65,31 +65,83 @@ def _internet_applies_to(ipc: Dict[str, Any], strategy: str) -> bool:
     return strategy in seq
 
 
+# When ``allenai/c4`` streaming fails (cluster network, Hub gzip resolution), try these.
+_DEFAULT_INTERNET_FALLBACKS: Tuple[Tuple[str, Optional[str], str], ...] = (
+    ("wikipedia", "20220301.en", "text"),
+)
+
+
 def _internet_text_stream(ipc: Dict[str, Any]) -> Iterator[str]:
-    """Yield long text lines from a streaming HF dataset (web-like / C4-style)."""
+    """Yield long text lines from a streaming HF dataset (web-like / C4-style).
+
+    Tries the configured dataset first, then optional YAML ``fallback_datasets``, then
+    built-in fallbacks. Streaming ``allenai/c4`` often raises ``FileNotFoundError`` on
+    compute nodes; Wikipedia English is a reliable substitute for long-document prefixes.
+    """
     from datasets import load_dataset
 
-    name = str(ipc.get("dataset_name", "allenai/c4"))
-    conf = ipc.get("dataset_config")
-    if conf is None or conf == "null":
-        conf = None
-    field = str(ipc.get("text_field", "text"))
     split = str(ipc.get("split", "train"))
     min_chars = int(ipc.get("min_doc_chars", 80))
-    try:
-        ds = load_dataset(
-            name,
-            conf,
-            split=split,
-            streaming=True,
-            trust_remote_code=True,
-        )
-    except Exception:
-        ds = load_dataset(name, conf, split=split, streaming=True)
-    for row in ds:
-        t = row.get(field, "")
-        if isinstance(t, str) and len(t) >= min_chars:
-            yield t
+
+    primary_name = str(ipc.get("dataset_name", "allenai/c4"))
+    primary_conf = ipc.get("dataset_config")
+    if primary_conf is None or primary_conf == "null":
+        primary_conf = None
+    primary_field = str(ipc.get("text_field", "text"))
+
+    attempts: List[Tuple[str, Optional[str], str]] = [
+        (primary_name, primary_conf, primary_field),
+    ]
+    raw_fb = ipc.get("fallback_datasets")
+    if isinstance(raw_fb, list):
+        for item in raw_fb:
+            if not isinstance(item, dict):
+                continue
+            dn = item.get("dataset_name")
+            if not dn:
+                continue
+            dc = item.get("dataset_config")
+            if dc is None or dc == "null":
+                dc = None
+            tf = str(item.get("text_field", "text"))
+            attempts.append((str(dn), dc, tf))
+    for trip in _DEFAULT_INTERNET_FALLBACKS:
+        attempts.append(trip)
+
+    # De-dupe by (hub id, config) keeping first text_field
+    seen: set = set()
+    uniq: List[Tuple[str, Optional[str], str]] = []
+    for name, conf, field in attempts:
+        key = (name, conf)
+        if key in seen:
+            continue
+        seen.add(key)
+        uniq.append((name, conf, field))
+
+    last_err: Optional[BaseException] = None
+    for name, conf, field in uniq:
+        try:
+            kwargs = dict(split=split, streaming=True)
+            try:
+                ds = load_dataset(name, conf, trust_remote_code=True, **kwargs)
+            except Exception:
+                ds = load_dataset(name, conf, **kwargs)
+            for row in ds:
+                t = row.get(field, "")
+                if isinstance(t, str) and len(t) >= min_chars:
+                    yield t
+            return
+        except Exception as e:
+            last_err = e
+            continue
+
+    hint = (
+        "internet_prefix: could not open any streaming dataset (network / Hub cache?). "
+        "Set HF_HOME, ensure compute nodes reach huggingface.co, or add "
+        "``internet_prefix.fallback_datasets`` in YAML. "
+        f"Last error: {last_err!r}"
+    )
+    raise RuntimeError(hint) from last_err
 
 
 def _next_prefix_id_batch(

@@ -36,6 +36,12 @@ generation:
       - top_k
     dataset_name: allenai/c4
     dataset_config: en
+    # If C4 streaming fails on the cluster (common), ``generation.py`` falls back to Wikipedia EN.
+    # Override with explicit fallbacks, e.g.:
+    # fallback_datasets:
+    #   - dataset_name: wikipedia
+    #     dataset_config: "20220301.en"
+    #     text_field: text
     text_field: text
     split: train
     prefix_tokens: 10
