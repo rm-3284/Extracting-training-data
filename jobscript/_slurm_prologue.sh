@@ -27,6 +27,9 @@ export PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 TMP_BASE="${TMP_BASE:-/n/fs/vision-mix/rm4411/tmp}"
 mkdir -p "${TMP_BASE}" 2>/dev/null || true
 export TMPDIR="${TMPDIR:-${TMP_BASE}}"
+if [[ ! -d "${TMPDIR}" ]] || [[ ! -w "${TMPDIR}" ]]; then
+  export TMPDIR="${TMP_BASE}"
+fi
 mkdir -p "${TMPDIR}" 2>/dev/null || export TMPDIR=/tmp
 
 _mia_eval_conda_init() {

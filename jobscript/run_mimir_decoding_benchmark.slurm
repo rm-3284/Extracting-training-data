@@ -33,6 +33,7 @@
 # Optional environment overrides (all optional):
 #   CONDA_ENV         explicit conda env name OR path (overrides default mimir_bench path)
 #   MIMIR_ENV_PREFIX  path to env created by setup_mimir_conda_env.sh (default: ${PROJECT_ROOT}/.conda/envs/mimir_bench)
+#   MIMIR_TORCH       cu121 | cu124 | cpu — wheel index if job must pip-install torch (default: cu121)
 #   N_EXAMPLES        --n-examples (default: 50)
 #   BENCH_OUTPUT      --output JSON path (default: logs/${SLURM_JOB_ID}/mimir_bench.json)
 #   SKIP_SLOW         set to 1 to pass --skip-slow
@@ -62,6 +63,15 @@ mkdir -p "${TMPDIR}"
 # shellcheck source=jobscript/_slurm_prologue.sh
 source "${PROJECT_ROOT}/jobscript/_slurm_prologue.sh"
 
+# Prologue uses TMPDIR:-TMP_BASE; if Slurm exported TMPDIR=/scratch/... and that path is missing,
+# TMPDIR can still be invalid. Force a writable TMPDIR under the repo after prologue runs.
+export TMP_BASE="${TMP_BASE:-${PROJECT_ROOT}/tmp}"
+mkdir -p "${TMP_BASE}"
+if [[ -z "${TMPDIR:-}" || ! -d "${TMPDIR}" || ! -w "${TMPDIR}" ]]; then
+  export TMPDIR="${TMP_BASE}"
+fi
+mkdir -p "${TMPDIR}"
+
 export MIMIR_ENV_PREFIX="${MIMIR_ENV_PREFIX:-${PROJECT_ROOT}/.conda/envs/mimir_bench}"
 if [[ -n "${CONDA_ENV:-}" ]]; then
   conda activate "${CONDA_ENV}"
@@ -81,21 +91,34 @@ export AUTO_INSTALL_DEPS="${AUTO_INSTALL_DEPS:-1}"
 export PYTHONNOUSERSITE=1
 unset PYTHONHOME || true
 
-# Benchmark loads PyTorch / transformers
-python - <<'PY'
-import sys
+echo "--- conda / python ---"
+echo "CONDA_PREFIX=${CONDA_PREFIX:-}"
+echo "which python: $(command -v python)"
+python -c "import sys; print('sys.executable:', sys.executable)"
 
-try:
-    import torch
+_mimir_ensure_torch() {
+  if python -c "import torch" 2>/dev/null; then
+    python -c "import torch; print('torch:', torch.__version__, 'cuda:', torch.cuda.is_available())"
+    return 0
+  fi
+  if [[ "${AUTO_INSTALL_DEPS:-1}" != "1" ]]; then
+    echo "ERROR: torch is not installed and AUTO_INSTALL_DEPS=0." >&2
+    echo "Run once: bash ${PROJECT_ROOT}/jobscript/setup_mimir_conda_env.sh" >&2
+    return 1
+  fi
+  local idx="https://download.pytorch.org/whl/cu121"
+  case "${MIMIR_TORCH:-cu121}" in
+    cpu) idx="https://download.pytorch.org/whl/cpu" ;;
+    cu124) idx="https://download.pytorch.org/whl/cu124" ;;
+    cu121|*) idx="https://download.pytorch.org/whl/cu121" ;;
+  esac
+  echo "torch missing; installing into active env with: python -m pip install torch ... --index-url ${idx}"
+  python -m pip install -U pip setuptools wheel
+  python -m pip install -U torch torchvision torchaudio --index-url "${idx}"
+  python -c "import torch; print('torch:', torch.__version__, 'cuda:', torch.cuda.is_available())"
+}
 
-    print("torch:", torch.__version__, "cuda:", torch.cuda.is_available())
-except ImportError:
-    print(
-        "ERROR: No module named 'torch' in the activated conda env.",
-        file=sys.stderr,
-    )
-    sys.exit(1)
-PY
+_mimir_ensure_torch || exit 1
 
 JOB_TAG="${SLURM_JOB_ID:-manual}"
 mkdir -p "logs/${JOB_TAG}"
