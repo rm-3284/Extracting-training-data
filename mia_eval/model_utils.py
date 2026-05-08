@@ -6,7 +6,8 @@ import os
 from typing import Any, Dict, Optional, Tuple
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, PreTrainedModel
+from transformers.generation.utils import GenerationMixin
 
 from mia_eval.openlm_hf_loader import ensure_openlm_hf_registered, is_openlm_load_error
 
@@ -31,6 +32,19 @@ def torch_dtype_from_str(s: Optional[str]) -> Optional[torch.dtype]:
 def _from_pretrained_causal_lm(model_name: str, kwargs: Dict[str, Any]) -> Any:
     try:
         return AutoModelForCausalLM.from_pretrained(model_name, **kwargs)
+    except ValueError as e:
+        # Some Dolly mirrors omit ``model_type`` in config.json, but weights are GPT-NeoX-compatible.
+        # Fallback to a known GPT-NeoX config so model class resolution succeeds.
+        msg = str(e).lower()
+        if "unrecognized model" in msg and "model_type" in msg and "dolly" in model_name.lower():
+            cfg_kwargs: Dict[str, Any] = {}
+            if "token" in kwargs:
+                cfg_kwargs["token"] = kwargs["token"]
+            cfg = AutoConfig.from_pretrained("EleutherAI/pythia-12b", trust_remote_code=True, **cfg_kwargs)
+            kw3 = dict(kwargs)
+            kw3["config"] = cfg
+            return AutoModelForCausalLM.from_pretrained(model_name, **kw3)
+        raise
     except TypeError:
         kw2 = dict(kwargs)
         kw2.pop("attn_implementation", None)
@@ -83,6 +97,36 @@ def _normalize_all_tied_weights_keys(model: Any) -> None:
             v = getattr(target, "all_tied_weights_keys")
             if isinstance(v, list):
                 setattr(target, "all_tied_weights_keys", {})
+
+
+def _ensure_generate_method(model: Any) -> None:
+    """Backfill `.generate` for older remote-code classes lacking GenerationMixin."""
+    if hasattr(model, "generate"):
+        return
+    # Bind at class level so bound method works for this instance and future instances.
+    model.__class__.generate = GenerationMixin.generate
+
+
+def _ensure_tie_weights_signature_compat(model: Any) -> None:
+    """Allow older remote-code tie_weights(self) under newer Transformers calls."""
+    import inspect
+
+    cls = model.__class__
+    tie = getattr(cls, "tie_weights", None)
+    if tie is None:
+        return
+    try:
+        sig = inspect.signature(tie)
+    except (TypeError, ValueError):
+        return
+    if "missing_keys" in sig.parameters:
+        return
+    _orig_tie = tie
+
+    def _tie_weights_compat(self, *args, **kwargs):
+        return _orig_tie(self)
+
+    cls.tie_weights = _tie_weights_compat
 
 
 def load_causal_lm(
@@ -157,6 +201,8 @@ def load_causal_lm(
         else:
             raise
     _normalize_all_tied_weights_keys(model)
+    _ensure_tie_weights_signature_compat(model)
+    _ensure_generate_method(model)
     model.to(device)
     model.eval()
     if hasattr(model.config, "pad_token_id") and model.config.pad_token_id is None:
