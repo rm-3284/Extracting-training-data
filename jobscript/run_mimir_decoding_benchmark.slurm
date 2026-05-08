@@ -114,11 +114,42 @@ _mimir_ensure_torch() {
   esac
   echo "torch missing; installing into active env with: python -m pip install torch ... --index-url ${idx}"
   python -m pip install -U pip setuptools wheel
-  python -m pip install -U torch torchvision torchaudio --index-url "${idx}"
+  # Avoid -U on torch so pip does not opportunistically upgrade huggingface_hub to 1.x.
+  python -m pip install torch torchvision torchaudio --index-url "${idx}"
   python -c "import torch; print('torch:', torch.__version__, 'cuda:', torch.cuda.is_available())"
 }
 
 _mimir_ensure_torch || exit 1
+
+# Keep transformers / hub / regex / tokenizers consistent (repairs envs where hub was bumped to 1.x).
+_mimir_sync_hf_requirements() {
+  if [[ "${AUTO_INSTALL_DEPS:-1}" != "1" ]]; then
+    return 0
+  fi
+  local req="${PROJECT_ROOT}/jobscript/requirements_mimir.txt"
+  if [[ ! -f "${req}" ]]; then
+    echo "WARN: missing ${req}; skipping HF stack sync." >&2
+    return 0
+  fi
+  echo "Syncing HF/transformers deps: pip install -r ${req}"
+  python -m pip install -q -r "${req}"
+}
+
+_mimir_sync_hf_requirements || exit 1
+
+python - <<'PY'
+import huggingface_hub as h
+import transformers
+import regex
+
+v = getattr(h, "__version__", "")
+if v.startswith("1."):
+    raise SystemExit(
+        f"huggingface_hub {v} is incompatible with transformers<5; need hub<1. "
+        "Run: python -m pip install -r jobscript/requirements_mimir.txt"
+    )
+print("HF stack OK: huggingface_hub", v, "transformers", transformers.__version__)
+PY
 
 JOB_TAG="${SLURM_JOB_ID:-manual}"
 mkdir -p "logs/${JOB_TAG}"

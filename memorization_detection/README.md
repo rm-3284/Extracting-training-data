@@ -67,7 +67,14 @@ Other useful flags: `--models ...`, `--seed 0`, `--verbose`, **`--top-k`** (defa
 bash jobscript/setup_mimir_conda_env.sh
 ```
 
-Default env path: `.conda/envs/mimir_bench` under the repo (gitignored). Then submit [`../jobscript/run_mimir_decoding_benchmark.slurm`](../jobscript/run_mimir_decoding_benchmark.slurm) with `HF_TOKEN` set; the job activates that env automatically unless you pass `CONDA_ENV` or `MIMIR_ENV_PREFIX`. Optional: [`../jobscript/environment_mimir.yml`](../jobscript/environment_mimir.yml) if you prefer `conda env create -f` instead of the setup script.
+Default env path: `.conda/envs/mimir_bench` under the repo (gitignored). **`conda env list` shows prefix-created envs with an empty name** in the first column—look for that path in the right-hand column. Activate with `conda activate /full/path/to/.conda/envs/mimir_bench`. Then submit [`../jobscript/run_mimir_decoding_benchmark.slurm`](../jobscript/run_mimir_decoding_benchmark.slurm) with `HF_TOKEN` set; the job activates that env automatically unless you pass `CONDA_ENV` or `MIMIR_ENV_PREFIX`. Optional: [`../jobscript/environment_mimir.yml`](../jobscript/environment_mimir.yml) if you prefer `conda env create -f` instead of the setup script.
+
+If imports fail (`regex`, `huggingface_hub` 1.x vs `transformers`), reinstall the pinned stack:
+
+```bash
+conda activate .conda/envs/mimir_bench   # or your prefix
+python -m pip install -r jobscript/requirements_mimir.txt
+```
 
 ### Changing the model
 

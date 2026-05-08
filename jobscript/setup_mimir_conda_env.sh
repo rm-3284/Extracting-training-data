@@ -74,25 +74,15 @@ case "${TORCH}" in
     ;;
 esac
 
-# Align with cluster NumPy 1.x stacks; avoids pandas/numexpr ABI issues from NumPy 2.
-echo "Installing HF stack ..."
-"${PIP}" install \
-  "numpy>=1.26,<2" \
-  "transformers>=4.36,<5" \
-  "datasets>=2.19,<4" \
-  "accelerate>=0.26" \
-  "huggingface_hub>=0.23,<1" \
-  safetensors \
-  sentencepiece \
-  tqdm \
-  filelock \
-  pyyaml \
-  dill \
-  multiprocess
+# HF stack (pins huggingface_hub<1 for transformers; includes regex, tokenizers, hf-xet).
+REQ="${SCRIPT_DIR}/requirements_mimir.txt"
+echo "Installing HF stack from ${REQ} ..."
+"${PIP}" install -r "${REQ}"
 
 echo ""
 echo "Done."
+echo "  Note: prefix envs show with a blank name in 'conda env list' — only the path column matters."
 echo "  Activate:  conda activate ${PREFIX}"
-echo "  Verify:    conda activate ${PREFIX} && python -c \"import torch, datasets, transformers; print('torch', torch.__version__, 'cuda', torch.cuda.is_available())\""
+echo "  Verify:    conda activate ${PREFIX} && python -c \"import torch, transformers, regex; print('torch', torch.__version__, 'cuda', torch.cuda.is_available())\""
 echo "  Slurm:     sbatch --export=ALL,HF_TOKEN=\"\$HF_TOKEN\" jobscript/run_mimir_decoding_benchmark.slurm"
 echo "           (uses this env automatically if CONDA_ENV is unset and ${PREFIX} exists)"
