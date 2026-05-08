@@ -100,12 +100,18 @@ def _normalize_all_tied_weights_keys(model: Any) -> None:
 
 
 def _ensure_dynamic_cache_flag(model: Any) -> None:
-    """Remote-code models may omit flags newer ``generate`` reads."""
+    """Ensure ``_supports_default_dynamic_cache`` is GenerationMixin's classmethod.
+
+    Transformers 5+ calls ``self._supports_default_dynamic_cache()`` inside ``generate``.
+    A plain ``bool`` (from an older mistaken patch) raises ``TypeError: 'bool' object is not callable``.
+    """
     cls = model.__class__
-    default = getattr(PreTrainedModel, "_supports_default_dynamic_cache", True)
-    # Always refresh OpenLM: some stacks report the flag via MRO but instance access still fails.
-    if cls.__name__ == "OpenLMForCausalLM" or not hasattr(model, "_supports_default_dynamic_cache"):
-        setattr(cls, "_supports_default_dynamic_cache", default)
+    cm = GenerationMixin.__dict__.get("_supports_default_dynamic_cache")
+    if not isinstance(cm, classmethod):
+        return
+    cur = getattr(cls, "_supports_default_dynamic_cache", None)
+    if cur is None or isinstance(cur, bool):
+        setattr(cls, "_supports_default_dynamic_cache", cm)
 
 
 def _ensure_generation_methods(model: Any) -> None:
@@ -116,9 +122,12 @@ def _ensure_generation_methods(model: Any) -> None:
             continue
         if not callable(attr):
             continue
-        if not hasattr(cls, name):
-            # Assign unbound function to class; Python binds it on instance access.
-            setattr(cls, name, attr)
+        # Some remote checkpoints expose names like ``generate`` as non-callable flags.
+        # Only skip when an existing *callable* implementation is present.
+        existing = getattr(cls, name, None)
+        if callable(existing):
+            continue
+        setattr(cls, name, attr)
 
 
 def _ensure_tie_weights_signature_compat(model: Any) -> None:

@@ -20,17 +20,6 @@ import sys
 import types
 
 
-def _ensure_openlm_generation_flags() -> None:
-    """OpenLM HF class predates newer ``generate`` cache flags; set explicitly on the class."""
-    try:
-        from transformers import PreTrainedModel
-        from open_lm.hf.modeling_openlm import OpenLMForCausalLM
-    except Exception:
-        return
-    default = getattr(PreTrainedModel, "_supports_default_dynamic_cache", True)
-    OpenLMForCausalLM._supports_default_dynamic_cache = default
-
-
 def _ensure_openlm_tie_weights_compat() -> None:
     """Patch OpenLM tie_weights signature for newer Transformers kwargs."""
     try:
@@ -103,7 +92,6 @@ def ensure_openlm_hf_registered() -> None:
         except Exception:
             _install_xformers_ops_fallback()
         import open_lm.hf  # noqa: F401
-        _ensure_openlm_generation_flags()
         _ensure_openlm_tie_weights_compat()
     except ImportError as e:
         raise ImportError(
