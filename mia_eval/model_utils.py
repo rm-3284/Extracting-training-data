@@ -130,6 +130,36 @@ def _ensure_generation_methods(model: Any) -> None:
         setattr(cls, name, attr)
 
 
+def _ensure_config_generation_attrs(model: Any) -> None:
+    """Backfill config fields Transformers ``generate`` / cache code expects."""
+    cfg = getattr(model, "config", None)
+    if cfg is None:
+        return
+    if not hasattr(cfg, "use_cache"):
+        try:
+            cfg.use_cache = True
+        except (AttributeError, TypeError):
+            pass
+    # OpenLM/DCLM configs use open_lm names (``n_layers``, ``dim``) on ``OpenLMConfig``.
+    mt = getattr(cfg, "model_type", None)
+    if mt == "openlm" or type(cfg).__name__ == "OpenLMConfig":
+        try:
+            if not hasattr(cfg, "num_hidden_layers"):
+                nl = getattr(cfg, "n_layers", None)
+                if nl is not None:
+                    cfg.num_hidden_layers = int(nl)
+            if not hasattr(cfg, "hidden_size"):
+                d = getattr(cfg, "dim", None)
+                if d is not None:
+                    cfg.hidden_size = int(d)
+            if not hasattr(cfg, "num_attention_heads"):
+                nh = getattr(cfg, "n_heads", None)
+                if nh is not None:
+                    cfg.num_attention_heads = int(nh)
+        except (AttributeError, TypeError, ValueError):
+            pass
+
+
 def _ensure_tie_weights_signature_compat(model: Any) -> None:
     """Allow older remote-code tie_weights(self) under newer Transformers calls."""
     import inspect
@@ -231,6 +261,7 @@ def load_causal_lm(
     _ensure_dynamic_cache_flag(model)
     _ensure_tie_weights_signature_compat(model)
     _ensure_generation_methods(model)
+    _ensure_config_generation_attrs(model)
     model.to(device)
     model.eval()
     if hasattr(model.config, "pad_token_id") and model.config.pad_token_id is None:
