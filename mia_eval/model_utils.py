@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import os
 from typing import Any, Dict, Optional, Tuple
 
@@ -27,6 +28,17 @@ def torch_dtype_from_str(s: Optional[str]) -> Optional[torch.dtype]:
         "float32": torch.float32,
     }
     return m.get(str(s).lower())
+
+
+def _dtype_kwargs_for_from_pretrained(torch_dtype: torch.dtype) -> Dict[str, Any]:
+    """Prefer ``dtype`` (Transformers 5+) over deprecated ``torch_dtype``."""
+    try:
+        sig = inspect.signature(AutoModelForCausalLM.from_pretrained)
+        if "dtype" in sig.parameters:
+            return {"dtype": torch_dtype}
+    except (TypeError, ValueError):
+        pass
+    return {"torch_dtype": torch_dtype}
 
 
 def _from_pretrained_causal_lm(model_name: str, kwargs: Dict[str, Any]) -> Any:
@@ -319,7 +331,7 @@ def load_causal_lm(
     if hf_token:
         kwargs["token"] = hf_token
     if torch_dtype is not None:
-        kwargs["torch_dtype"] = torch_dtype
+        kwargs.update(_dtype_kwargs_for_from_pretrained(torch_dtype))
     if attn_implementation:
         kwargs["attn_implementation"] = attn_implementation
 
