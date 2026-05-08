@@ -160,6 +160,29 @@ def _ensure_config_generation_attrs(model: Any) -> None:
             pass
 
 
+def _ensure_olmo_forward_kwarg_compat(model: Any) -> None:
+    """Drop kwargs newer ``generate`` passes that older hf_olmo ``forward`` rejects."""
+    cls = model.__class__
+    if cls.__name__ != "OLMoForCausalLM":
+        return
+    if getattr(cls, "_mia_eval_forward_kwarg_filtered", False):
+        return
+    import inspect
+
+    _orig_forward = cls.forward
+
+    def _forward(self, *args, **kwargs):
+        sig = inspect.signature(_orig_forward)
+        if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
+            return _orig_forward(self, *args, **kwargs)
+        allowed = {n for n in sig.parameters if n != "self"}
+        kwargs = {k: v for k, v in kwargs.items() if k in allowed}
+        return _orig_forward(self, *args, **kwargs)
+
+    cls.forward = _forward
+    cls._mia_eval_forward_kwarg_filtered = True
+
+
 def _ensure_tie_weights_signature_compat(model: Any) -> None:
     """Allow older remote-code tie_weights(self) under newer Transformers calls."""
     import inspect
@@ -261,6 +284,7 @@ def load_causal_lm(
     _ensure_dynamic_cache_flag(model)
     _ensure_tie_weights_signature_compat(model)
     _ensure_generation_methods(model)
+    _ensure_olmo_forward_kwarg_compat(model)
     _ensure_config_generation_attrs(model)
     model.to(device)
     model.eval()

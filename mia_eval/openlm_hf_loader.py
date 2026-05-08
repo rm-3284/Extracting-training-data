@@ -20,6 +20,20 @@ import sys
 import types
 
 
+def _ensure_openlm_legacy_kv_cache() -> None:
+    """Force legacy tuple/list ``past_key_values``; ``open_lm`` layers are not ``DynamicCache``-compatible."""
+    try:
+        from open_lm.hf.modeling_openlm import OpenLMForCausalLM
+    except Exception:
+        return
+
+    @classmethod
+    def _openlm_supports_default_dynamic_cache(_cls) -> bool:
+        return False
+
+    OpenLMForCausalLM._supports_default_dynamic_cache = _openlm_supports_default_dynamic_cache
+
+
 def _ensure_openlm_tie_weights_compat() -> None:
     """Patch OpenLM tie_weights signature for newer Transformers kwargs."""
     try:
@@ -92,6 +106,7 @@ def ensure_openlm_hf_registered() -> None:
         except Exception:
             _install_xformers_ops_fallback()
         import open_lm.hf  # noqa: F401
+        _ensure_openlm_legacy_kv_cache()
         _ensure_openlm_tie_weights_compat()
     except ImportError as e:
         raise ImportError(
