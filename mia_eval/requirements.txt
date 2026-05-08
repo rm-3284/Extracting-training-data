@@ -1,8 +1,10 @@
 torch>=2.0
 numpy>=1.20
 transformers>=4.36
-# Optional: DCLM / OpenLM checkpoints (``model_type=openlm``) — see ``mia_eval/openlm_hf_loader.py``
-#   pip install "git+https://github.com/mlfoundations/open_lm.git"
+# Streaming datasets (internet_prefix / C4) need ``huggingface_hub.hf_file_system``; old/partial installs raise ImportError.
+huggingface_hub>=0.23.5
+# Optional: DCLM / OpenLM (``model_type=openlm``) — use ``--no-deps`` + ``constraints_openlm_inference.txt``
+#   (full ``open_lm`` install pulls mosaicml/ray and can break on PyYAML 5.x sdists). See ``openlm_hf_loader.py``.
 datasets>=2.14
 pyyaml>=6.0
 scikit-learn>=1.2

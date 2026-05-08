@@ -3,13 +3,39 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
+
+try:
+    from tqdm.auto import tqdm
+except ImportError:
+    tqdm = None  # type: ignore[misc, assignment]
 
 import torch
 
 from .ground_truth import stream_texts
 from .model_utils import load_causal_lm, pick_device, torch_dtype_from_str
+
+
+def _carlini_log(msg: str, *, verbose: bool = False) -> None:
+    """Progress / debug lines (always flush for Slurm). Use CARLINI_VERBOSE=1 for extra detail."""
+    if verbose and os.environ.get("CARLINI_VERBOSE", "").strip().lower() not in (
+        "1",
+        "true",
+        "yes",
+    ):
+        return
+    print(msg, flush=True)
+
+
+def _carlini_pbar(total: int, desc: str):
+    if tqdm is None or os.environ.get("CARLINI_NO_TQDM", "").strip() in ("1", "true", "yes"):
+        return None
+    file = sys.stderr if getattr(sys.stderr, "isatty", lambda: False)() else sys.stdout
+    return tqdm(total=total, desc=desc, unit="sample", leave=True, file=file)
+
 
 try:
     from transformers.generation.logits_process import LogitsProcessor, LogitsProcessorList
@@ -268,23 +294,30 @@ def _run_strategy(
 ) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     need = n
-    while need > 0:
-        b = min(bs, need)
-        texts = _generate_batch(
-            model,
-            tokenizer,
-            device,
-            b,
-            seq_len,
-            top_k=top_k,
-            top_p=top_p,
-            do_sample=True,
-            logits_processors=logits_processors,
-            temperature=temperature,
-        )
-        for t in texts:
-            rows.append({"text": t, "source": source})
-        need = n - len(rows)
+    pbar = _carlini_pbar(n, desc=f"generate:{source}")
+    try:
+        while need > 0:
+            b = min(bs, need)
+            texts = _generate_batch(
+                model,
+                tokenizer,
+                device,
+                b,
+                seq_len,
+                top_k=top_k,
+                top_p=top_p,
+                do_sample=True,
+                logits_processors=logits_processors,
+                temperature=temperature,
+            )
+            for t in texts:
+                rows.append({"text": t, "source": source})
+            need = n - len(rows)
+            if pbar is not None:
+                pbar.update(len(texts))
+    finally:
+        if pbar is not None:
+            pbar.close()
     return rows[:n]
 
 
@@ -307,38 +340,45 @@ def _run_strategy_internet(
 ) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     need = n
-    while need > 0:
-        b = min(bs, need)
-        batch_ids = _next_prefix_id_batch(tokenizer, text_iter, prefix_tokens, b)
-        if batch_ids is None:
-            break
-        attn = torch.ones(batch_ids.shape, dtype=torch.long)
-        texts = _generate_batch_from_input_ids(
-            model,
-            tokenizer,
-            device,
-            batch_ids,
-            attn,
-            seq_len,
-            top_k=top_k,
-            top_p=top_p,
-            do_sample=True,
-            logits_processors=logits_processors,
-            temperature=temperature,
-        )
-        for i, t in enumerate(texts):
-            pfx = tokenizer.decode(batch_ids[i], skip_special_tokens=True)
-            if prefix_chars_max > 0:
-                pfx = pfx[:prefix_chars_max]
-            rows.append(
-                {
-                    "text": t,
-                    "source": source,
-                    "prompt_prefix": pfx,
-                    "prefix_tokens": int(prefix_tokens),
-                }
+    pbar = _carlini_pbar(n, desc=f"generate:{source}")
+    try:
+        while need > 0:
+            b = min(bs, need)
+            batch_ids = _next_prefix_id_batch(tokenizer, text_iter, prefix_tokens, b)
+            if batch_ids is None:
+                break
+            attn = torch.ones(batch_ids.shape, dtype=torch.long)
+            texts = _generate_batch_from_input_ids(
+                model,
+                tokenizer,
+                device,
+                batch_ids,
+                attn,
+                seq_len,
+                top_k=top_k,
+                top_p=top_p,
+                do_sample=True,
+                logits_processors=logits_processors,
+                temperature=temperature,
             )
-        need = n - len(rows)
+            for i, t in enumerate(texts):
+                pfx = tokenizer.decode(batch_ids[i], skip_special_tokens=True)
+                if prefix_chars_max > 0:
+                    pfx = pfx[:prefix_chars_max]
+                rows.append(
+                    {
+                        "text": t,
+                        "source": source,
+                        "prompt_prefix": pfx,
+                        "prefix_tokens": int(prefix_tokens),
+                    }
+                )
+            need = n - len(rows)
+            if pbar is not None:
+                pbar.update(len(texts))
+    finally:
+        if pbar is not None:
+            pbar.close()
     if len(rows) < n:
         raise RuntimeError(
             f"internet_prefix: only collected {len(rows)}/{n} samples "
@@ -359,7 +399,28 @@ def generate_diverse_samples(
 
     target = model_bundle["target_model"]
     tokenizer_id = model_bundle.get("tokenizer") or target
+    _carlini_log(
+        f"[generate] run start model={target!r} tokenizer={tokenizer_id!r} "
+        f"device={device} dtype={dtype} out={out_path}",
+        verbose=False,
+    )
+    if "olmo" in target.lower():
+        _carlini_log(
+            "[generate] OLMo path: remote-code + compat shims in load_causal_lm; "
+            "set CARLINI_VERBOSE=1 for tokenizer/model step logs.",
+            verbose=False,
+        )
+
+    _carlini_log("[generate] loading tokenizer + model weights ...", verbose=False)
     model, tokenizer = load_causal_lm(target, tokenizer_id, device, dtype)
+    try:
+        param_dev = next(model.parameters()).device
+    except StopIteration:
+        param_dev = device
+    _carlini_log(
+        f"[generate] model ready: {type(model).__name__} params_device={param_dev}",
+        verbose=False,
+    )
 
     seq_len = int(gcfg.get("seq_len", 256))
     n_per = int(gcfg.get("num_samples_per_strategy", 32))
@@ -378,6 +439,7 @@ def generate_diverse_samples(
     if ipc.get("num_samples_per_strategy") is not None:
         n_per_inet = int(ipc["num_samples_per_strategy"])
     if internet_on:
+        _carlini_log("[generate] internet_prefix: opening text stream ...", verbose=False)
         text_iter = _internet_text_stream(ipc)
         skip0 = int(ipc.get("skip_initial_documents", 0))
         for _ in range(max(skip0, 0)):
@@ -386,6 +448,10 @@ def generate_diverse_samples(
             except StopIteration:
                 raise RuntimeError("internet_prefix: skip_initial_documents exceeds stream") from None
 
+    _carlini_log(
+        f"[generate] strategy top_k: target {n_per} samples (batch_size={bs}, seq_len={seq_len})",
+        verbose=False,
+    )
     records.extend(
         _run_strategy(
             model,
@@ -400,7 +466,14 @@ def generate_diverse_samples(
             logits_processors=None,
         )
     )
+    _carlini_log(f"[generate] top_k done: {len(records)} rows so far", verbose=False)
+
     if internet_on and text_iter is not None and _internet_applies_to(ipc, "top_k"):
+        _carlini_log(
+            f"[generate] strategy top_k_internet: target {n_per_inet} samples "
+            f"(prefix_tokens={prefix_tokens})",
+            verbose=False,
+        )
         records.extend(
             _run_strategy_internet(
                 model,
@@ -419,9 +492,14 @@ def generate_diverse_samples(
                 prefix_chars_max=prefix_chars_max,
             )
         )
+        _carlini_log(f"[generate] top_k_internet done: {len(records)} rows so far", verbose=False)
 
     td = gcfg.get("temperature_decay") or {}
     if td.get("enabled", True):
+        _carlini_log(
+            f"[generate] strategy temperature_decay: target {n_per} samples",
+            verbose=False,
+        )
         lp = LogitsProcessorList([DecayingTemperatureLogitsProcessor()])
         records.extend(
             _run_strategy(
@@ -437,9 +515,15 @@ def generate_diverse_samples(
                 logits_processors=lp,
             )
         )
+        _carlini_log(f"[generate] temperature_decay done: {len(records)} rows so far", verbose=False)
+
         if internet_on and text_iter is not None and _internet_applies_to(
             ipc, "temperature_decay"
         ):
+            _carlini_log(
+                f"[generate] strategy temperature_decay_internet: target {n_per_inet} samples",
+                verbose=False,
+            )
             records.extend(
                 _run_strategy_internet(
                     model,
@@ -458,10 +542,15 @@ def generate_diverse_samples(
                     prefix_chars_max=prefix_chars_max,
                 )
             )
+            _carlini_log(
+                f"[generate] temperature_decay_internet done: {len(records)} rows so far",
+                verbose=False,
+            )
 
     nuc = gcfg.get("nucleus") or {}
     if nuc.get("enabled"):
         n_nuc = int(nuc.get("num_samples", n_per))
+        _carlini_log(f"[generate] strategy nucleus: target {n_nuc} samples", verbose=False)
         records.extend(
             _run_strategy(
                 model,
@@ -477,8 +566,14 @@ def generate_diverse_samples(
                 temperature=float(nuc.get("temperature", 1.0)),
             )
         )
+        _carlini_log(f"[generate] nucleus done: {len(records)} rows so far", verbose=False)
+
         if internet_on and text_iter is not None and _internet_applies_to(ipc, "nucleus"):
             n_nuc_i = int(nuc.get("num_samples_internet", n_nuc))
+            _carlini_log(
+                f"[generate] strategy nucleus_internet: target {n_nuc_i} samples",
+                verbose=False,
+            )
             records.extend(
                 _run_strategy_internet(
                     model,
@@ -496,6 +591,10 @@ def generate_diverse_samples(
                     prefix_tokens=prefix_tokens,
                     prefix_chars_max=prefix_chars_max,
                 )
+            )
+            _carlini_log(
+                f"[generate] nucleus_internet done: {len(records)} rows so far",
+                verbose=False,
             )
 
     gt = model_bundle.get("ground_truth") or {}
@@ -539,4 +638,8 @@ def generate_diverse_samples(
     with open(out_path, "w", encoding="utf-8") as f:
         for r in records:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    _carlini_log(
+        f"[generate] wrote {len(records)} lines → {out_path}",
+        verbose=False,
+    )
     return out_path

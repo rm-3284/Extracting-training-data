@@ -23,6 +23,7 @@ import fcntl
 import json
 import random
 import sys
+import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Set
@@ -290,12 +291,13 @@ def run() -> None:
         with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(meta, f, indent=2, ensure_ascii=False)
 
-        print(f"[run] {run_key} ← {hf_id} ({dtype_str})")
+        print(f"[run] {run_key} ← {hf_id} ({dtype_str})", flush=True)
         try:
             generate_diverse_samples(base_cfg, model_bundle, out_jsonl)
         except Exception as e:
             err = f"{type(e).__name__}: {e}"
-            print(f"[fail] {run_key}: {err}")
+            print(f"[fail] {run_key}: {err}", flush=True)
+            traceback.print_exc(file=sys.stdout)
             manifest_partial["runs"].append(
                 {
                     "run_key": run_key,
@@ -308,6 +310,11 @@ def run() -> None:
                 torch.cuda.empty_cache()
             continue
 
+        n_lines = sum(1 for _ in open(out_jsonl, encoding="utf-8"))
+        print(
+            f"[ok] {run_key}: wrote {n_lines} lines → {out_jsonl}",
+            flush=True,
+        )
         manifest_partial["runs"].append(
             {
                 "run_key": run_key,

@@ -21,6 +21,9 @@
 #   sbatch jobscript/run_carlini_open_extract_array.slurm
 #
 # Optional env:
+#   PYTHONUNBUFFERED=1        (recommended: live log lines in *.out)
+#   CARLINI_VERBOSE=1         (extra load/debug prints in generation + model_utils)
+#   CARLINI_NO_TQDM=1         (disable tqdm bars if logs get cluttered)
 #   NUM_SAMPLES_PER_STRATEGY  (default: use YAML, currently 500)
 #   BATCH_SIZE                (default: use YAML generation.batch_size)
 #   CARLINI_CONFIG            (default: mia_eval/config/carlini_open_models.yaml)
@@ -30,6 +33,8 @@
 #
 # DCLM tasks expect ``open_lm`` already in the conda env (``import open_lm.hf`` registers ``openlm`` with
 # Transformers). One-time install: see ``mia_eval/openlm_hf_loader.py``.
+# Streaming ``internet_prefix`` needs ``huggingface_hub.hf_file_system`` (upgrade hub if ImportError).
+# Optional env: INSTALL_HUGGINGFACE_HUB=0 to skip the auto ``pip install`` below for dclm runs.
 #
 # Edit #SBATCH --chdir= to your clone if different.
 #
@@ -37,6 +42,8 @@
 # either create that directory or ``unset TMPDIR`` before ``sbatch`` so Slurm picks /tmp.
 
 set -euo pipefail
+
+export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
 
 # Runtime temp files (Python, HF cache staging): avoid inherited TMPDIR pointing at a missing scratch path.
 if [[ -z "${TMPDIR:-}" ]] || [[ ! -d "${TMPDIR}" ]]; then
@@ -109,6 +116,32 @@ if importlib.util.find_spec("hf_olmo") is None:
     )
 else:
     print("hf_olmo already available in active env")
+PY
+fi
+
+if [[ "${RUN_KEY}" == dclm* ]] && [[ "${INSTALL_HUGGINGFACE_HUB:-1}" == "1" ]]; then
+  python - <<'PY'
+import importlib.util
+import subprocess
+import sys
+
+try:
+    import huggingface_hub.hf_file_system  # noqa: F401
+except ImportError:
+    print("Installing huggingface_hub>=0.23.5 (streaming datasets require hf_file_system)")
+    subprocess.check_call(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "-U",
+            "--prefer-binary",
+            "huggingface_hub>=0.23.5",
+        ]
+    )
+else:
+    print("huggingface_hub.hf_file_system OK")
 PY
 fi
 

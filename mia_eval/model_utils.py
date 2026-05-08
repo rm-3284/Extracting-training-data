@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 import os
+
 from typing import Any, Dict, Optional, Tuple
 
 import torch
@@ -345,6 +346,13 @@ def load_causal_lm(
 
     tokenizer = _build_tokenizer()
 
+    _olmo_dbg = "olmo" in model_name.lower()
+    if _olmo_dbg:
+        print(
+            f"[load_causal_lm] OLMo: tokenizer ok ({tok_name}); loading weights from {model_name!r} …",
+            flush=True,
+        )
+
     kwargs: Dict[str, Any] = {"trust_remote_code": True}
     if hf_token:
         kwargs["token"] = hf_token
@@ -358,6 +366,12 @@ def load_causal_lm(
         ensure_openlm_hf_registered()
 
     _ensure_tied_weights_attr_for_compat(model_name)
+
+    if _olmo_dbg:
+        print(
+            "[load_causal_lm] OLMo: from_pretrained starting (remote code; first forward compat after load) …",
+            flush=True,
+        )
 
     try:
         model = _from_pretrained_causal_lm(model_name, kwargs)
@@ -378,6 +392,18 @@ def load_causal_lm(
     model.eval()
     if hasattr(model.config, "pad_token_id") and model.config.pad_token_id is None:
         model.config.pad_token_id = tokenizer.pad_token_id
+
+    if _olmo_dbg:
+        try:
+            pdev = next(model.parameters()).device
+        except StopIteration:
+            pdev = device
+        print(
+            f"[load_causal_lm] OLMo: ready {type(model).__name__} on {pdev}; "
+            "compat hooks applied (KV cache / generate / forward).",
+            flush=True,
+        )
+
     return model, tokenizer
 
 
