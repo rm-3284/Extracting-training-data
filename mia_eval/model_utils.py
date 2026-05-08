@@ -99,6 +99,15 @@ def _normalize_all_tied_weights_keys(model: Any) -> None:
                 setattr(target, "all_tied_weights_keys", {})
 
 
+def _ensure_dynamic_cache_flag(model: Any) -> None:
+    """Remote-code models may omit flags newer ``generate`` reads."""
+    cls = model.__class__
+    default = getattr(PreTrainedModel, "_supports_default_dynamic_cache", True)
+    # Always refresh OpenLM: some stacks report the flag via MRO but instance access still fails.
+    if cls.__name__ == "OpenLMForCausalLM" or not hasattr(model, "_supports_default_dynamic_cache"):
+        setattr(cls, "_supports_default_dynamic_cache", default)
+
+
 def _ensure_generation_methods(model: Any) -> None:
     """Backfill missing GenerationMixin methods for older remote-code classes."""
     cls = model.__class__
@@ -210,6 +219,7 @@ def load_causal_lm(
         else:
             raise
     _normalize_all_tied_weights_keys(model)
+    _ensure_dynamic_cache_flag(model)
     _ensure_tie_weights_signature_compat(model)
     _ensure_generation_methods(model)
     model.to(device)
