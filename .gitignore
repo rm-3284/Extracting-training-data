@@ -1,1 +1,4 @@
 \__pycache__
+.slurm_pip_deps/
+.slurm_pip_overlay/
+tmp/

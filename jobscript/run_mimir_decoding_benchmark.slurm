@@ -33,7 +33,7 @@
 #   BENCH_OUTPUT      --output JSON path (default: logs/${SLURM_JOB_ID}/mimir_bench.json)
 #   SKIP_SLOW         set to 1 to pass --skip-slow
 #   AUTO_INSTALL_DEPS set to 0 to disable auto pip install when missing
-#   PIP_TARGET        writable dir for --target installs (default: ${PROJECT_ROOT}/.slurm_pip_deps)
+#   PIP_OVERLAY_DIR   writable dir for per-job overlay installs (default: ${PROJECT_ROOT}/.slurm_pip_overlay)
 #   TMP_BASE          temp dir Slurm/prologue use (default: ${PROJECT_ROOT}/tmp — avoids /scratch/... if missing)
 #   BENCH_ARGS        optional extra CLI tokens (unquoted expansion), e.g.:
 #                       export BENCH_ARGS="--verbose --seed 1 --models gpt_neo_2p7"
@@ -84,7 +84,10 @@ echo "PROJECT_ROOT=${PROJECT_ROOT}"
 echo "Job ID: ${JOB_TAG}"
 echo "Writing: ${OUT_JSON}"
 echo "Python: $(command -v python)"
-export PIP_TARGET="${PIP_TARGET:-${PROJECT_ROOT}/.slurm_pip_deps}"
+# Fresh per-job pip overlay to avoid stale package conflicts.
+export PIP_OVERLAY_DIR="${PIP_OVERLAY_DIR:-${PROJECT_ROOT}/.slurm_pip_overlay}"
+export PIP_TARGET="${PIP_OVERLAY_DIR}/${JOB_TAG}"
+rm -rf "${PIP_TARGET}"
 mkdir -p "${PIP_TARGET}"
 if [[ "${AUTO_INSTALL_DEPS:-1}" == "1" ]]; then
 python - <<'PY'
@@ -96,18 +99,17 @@ pip_target = os.environ["PIP_TARGET"]
 os.makedirs(pip_target, exist_ok=True)
 
 
-def deps_ok():
+def have_hub_commitinfo():
     try:
         import huggingface_hub  # noqa: F401
         from huggingface_hub import CommitInfo  # noqa: F401
-        import datasets  # noqa: F401
         return True
     except Exception:
         return False
 
 
-if not deps_ok():
-    print("huggingface_hub/datasets missing or incompatible; installing with pip --target")
+if not have_hub_commitinfo():
+    print("huggingface_hub missing/incompatible; installing minimal overlay with pip --target")
     print("  target:", pip_target)
     print("  python:", sys.executable)
     subprocess.check_call(
@@ -117,14 +119,14 @@ if not deps_ok():
             "pip",
             "install",
             "-U",
+            "--no-deps",
             "--target",
             pip_target,
-            "huggingface_hub>=0.23",
-            "datasets>=2.19",
+            "huggingface_hub>=0.23,<1.0",
         ]
     )
 PY
-  # Prefer packages in PIP_TARGET over a read-only shared Anaconda site-packages.
+  # Prefer packages in per-job overlay over read-only/shared site-packages.
   export PYTHONPATH="${PIP_TARGET}${PYTHONPATH:+:${PYTHONPATH}}"
 fi
 
@@ -141,7 +143,7 @@ try:
     import datasets as ds
     print("datasets:", getattr(ds, "__version__", "unknown"), "from", getattr(ds, "__file__", "unknown"))
 except Exception as e:
-    raise SystemExit(f"Failed importing datasets: {e}")
+    raise SystemExit(f"Failed importing datasets from active env. Use CONDA_ENV with datasets installed. Error: {e}")
 PY
 echo "Running: python memorization_detection/run_mimir_decoding_benchmark.py ${EXTRA[*]} ${BENCH_ARGS:-}"
 
