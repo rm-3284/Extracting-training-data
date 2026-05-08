@@ -83,6 +83,12 @@ def _ensure_tied_weights_attr_for_compat(model_name: str) -> None:
                     OLMoForCausalLM.tie_weights = _tie_weights_compat
             except Exception:
                 pass
+            # hf_olmo internals expect list/tuple KV cache per layer, not ``DynamicCache``.
+            @classmethod
+            def _olmo_supports_default_dynamic_cache(_cls) -> bool:
+                return False
+
+            OLMoForCausalLM._supports_default_dynamic_cache = _olmo_supports_default_dynamic_cache
         except Exception:
             # If hf_olmo is unavailable or API differs, keep generic base-class shim.
             pass
