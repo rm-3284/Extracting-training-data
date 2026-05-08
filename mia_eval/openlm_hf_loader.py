@@ -20,6 +20,27 @@ import sys
 import types
 
 
+def _ensure_openlm_tie_weights_compat() -> None:
+    """Patch OpenLM tie_weights signature for newer Transformers kwargs."""
+    try:
+        import inspect
+        from open_lm.hf.modeling_openlm import OpenLMForCausalLM
+    except Exception:
+        return
+    try:
+        sig = inspect.signature(OpenLMForCausalLM.tie_weights)
+    except (TypeError, ValueError):
+        return
+    if "missing_keys" in sig.parameters:
+        return
+    _orig = OpenLMForCausalLM.tie_weights
+
+    def _tie_weights_compat(self, *args, **kwargs):
+        return _orig(self)
+
+    OpenLMForCausalLM.tie_weights = _tie_weights_compat
+
+
 def _install_xformers_ops_fallback() -> None:
     """Provide a minimal ``xformers.ops`` shim when binary extensions are broken."""
     import torch
@@ -71,6 +92,7 @@ def ensure_openlm_hf_registered() -> None:
         except Exception:
             _install_xformers_ops_fallback()
         import open_lm.hf  # noqa: F401
+        _ensure_openlm_tie_weights_compat()
     except ImportError as e:
         raise ImportError(
             "OpenLM (DCLM) checkpoints need the ``open_lm`` package so "

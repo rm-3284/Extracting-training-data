@@ -99,12 +99,17 @@ def _normalize_all_tied_weights_keys(model: Any) -> None:
                 setattr(target, "all_tied_weights_keys", {})
 
 
-def _ensure_generate_method(model: Any) -> None:
-    """Backfill `.generate` for older remote-code classes lacking GenerationMixin."""
-    if hasattr(model, "generate"):
-        return
-    # Bind at class level so bound method works for this instance and future instances.
-    model.__class__.generate = GenerationMixin.generate
+def _ensure_generation_methods(model: Any) -> None:
+    """Backfill missing GenerationMixin methods for older remote-code classes."""
+    cls = model.__class__
+    for name, attr in GenerationMixin.__dict__.items():
+        if name.startswith("__"):
+            continue
+        if not callable(attr):
+            continue
+        if not hasattr(cls, name):
+            # Assign unbound function to class; Python binds it on instance access.
+            setattr(cls, name, attr)
 
 
 def _ensure_tie_weights_signature_compat(model: Any) -> None:
@@ -189,11 +194,15 @@ def load_causal_lm(
     if attn_implementation:
         kwargs["attn_implementation"] = attn_implementation
 
+    # Ensure OpenLM classes are registered and patched before from_pretrained for DCLM runs.
+    if any(k in model_name.lower() for k in ("dclm", "openlm")):
+        ensure_openlm_hf_registered()
+
     _ensure_tied_weights_attr_for_compat(model_name)
 
     try:
         model = _from_pretrained_causal_lm(model_name, kwargs)
-    except (ValueError, OSError) as e:
+    except (ValueError, OSError, TypeError) as e:
         if is_openlm_load_error(e):
             ensure_openlm_hf_registered()
             tokenizer = _build_tokenizer()
@@ -202,7 +211,7 @@ def load_causal_lm(
             raise
     _normalize_all_tied_weights_keys(model)
     _ensure_tie_weights_signature_compat(model)
-    _ensure_generate_method(model)
+    _ensure_generation_methods(model)
     model.to(device)
     model.eval()
     if hasattr(model.config, "pad_token_id") and model.config.pad_token_id is None:

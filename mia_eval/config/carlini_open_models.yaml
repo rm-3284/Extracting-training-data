@@ -110,8 +110,7 @@ carlini_runs:
   # Mirror: databricks/dolly-v2-12b is no longer reliably available on the Hub.
   - run_key: dolly_v2_12b
     project: Pythia
-    hf_model_id: seungwon12/dolly
-    tokenizer: EleutherAI/gpt-neox-20b
+    hf_model_id: ethzanalytics/dolly-v2-12b-sharded
     variant: post_train
     post_training: "SFT (Databricks-Dolly)"
     torch_dtype: float16
