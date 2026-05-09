@@ -32,7 +32,10 @@
 #   LABEL_SAVE_INDEX=1        Save training_shingle_index.json after build (default: on)
 #   HF_TOKEN                  For gated Hub datasets (e.g. bigcode/the-stack-dedup); or ``huggingface-cli login``
 #   LEGACY_GENERIC_CORPORA=1  Use old C4/Pile-by-project heuristic instead of YAML corpora
+#   HF_HUB_DOWNLOAD_TIMEOUT   Seconds per file download (increase if Hub read timeouts)
 #
+# If Slurm warns ``Unable to create TMPDIR [/scratch/...]``, Slurm resets TMPDIR to /tmp; this script
+# also sets TMPDIR to /tmp/<user>_carlini_label_tmp when unset or missing.
 # Single-run debug (override array index):
 #   sbatch --array=3 jobscript/run_carlini_label_training_overlap_array.slurm
 #

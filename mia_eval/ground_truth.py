@@ -88,39 +88,35 @@ def stream_texts(
     dataset_config: Optional[str],
     text_field: str,
     max_documents: int,
+    *,
+    hub_extra: Optional[Dict[str, Any]] = None,
 ) -> Iterator[str]:
     from datasets import load_dataset
+
+    hub_extra = dict(hub_extra or {})
 
     # togethercomputer/RedPajama-Data-1T requires a builder config (default, c4, …).
     if dataset_name == "togethercomputer/RedPajama-Data-1T" and not dataset_config:
         dataset_config = "default"
 
+    kw = dict(
+        split="train",
+        streaming=True,
+        trust_remote_code=True,
+        **hub_extra,
+    )
+
     try:
         if dataset_config:
-            ds = load_dataset(
-                dataset_name,
-                dataset_config,
-                split="train",
-                streaming=True,
-                trust_remote_code=True,
-            )
+            ds = load_dataset(dataset_name, dataset_config, **kw)
         else:
-            ds = load_dataset(
-                dataset_name,
-                split="train",
-                streaming=True,
-                trust_remote_code=True,
-            )
+            ds = load_dataset(dataset_name, **kw)
     except Exception:
+        kw.pop("trust_remote_code", None)
         if dataset_config:
-            ds = load_dataset(
-                dataset_name,
-                dataset_config,
-                split="train",
-                streaming=True,
-            )
+            ds = load_dataset(dataset_name, dataset_config, **kw)
         else:
-            ds = load_dataset(dataset_name, split="train", streaming=True)
+            ds = load_dataset(dataset_name, **kw)
 
     for i, row in enumerate(ds):
         if i >= max_documents:
@@ -147,12 +143,26 @@ def build_index_from_hf(
     return idx
 
 
+def _hub_extra_from_source(source: Dict[str, Any]) -> Dict[str, Any]:
+    """Optional HF ``load_dataset`` kwargs from YAML (verification_mode, revision, …)."""
+    out: Dict[str, Any] = {}
+    if source.get("verification_mode") is not None:
+        out["verification_mode"] = source["verification_mode"]
+    if source.get("revision") is not None:
+        out["revision"] = source["revision"]
+    extra = source.get("load_dataset_kwargs")
+    if isinstance(extra, dict):
+        out.update(extra)
+    return out
+
+
 def _load_dataset_stream(
     dataset_name: str,
     dataset_config: Optional[str],
     *,
     data_files: Any = None,
     data_dir: Any = None,
+    hub_extra: Optional[Dict[str, Any]] = None,
 ) -> Any:
     """``split=train`` streaming, with optional Parquet/JSONL ``data_files`` or ``data_dir`` (e.g. The Stack)."""
     from datasets import load_dataset
@@ -165,6 +175,7 @@ def _load_dataset_stream(
         "streaming": True,
         "trust_remote_code": True,
     }
+    base_kw.update(dict(hub_extra or {}))
     if data_files is not None:
         base_kw["data_files"] = data_files
     if data_dir is not None:
@@ -223,6 +234,7 @@ def iter_training_documents(source: Dict[str, Any]) -> Iterator[str]:
     """
     max_documents = int(source.get("max_documents", 2000))
     tok_ref = source.get("tokenizer_for_decode") or source.get("tokenizer_model_id")
+    hub = _hub_extra_from_source(source)
 
     if tok_ref:
         from datasets import load_dataset
@@ -245,6 +257,8 @@ def iter_training_documents(source: Dict[str, Any]) -> Iterator[str]:
         if data_files is not None:
             for a in attempts:
                 a["data_files"] = data_files
+        for a in attempts:
+            a.update(hub)
         for extra in attempts:
             try:
                 if ds_cfg is not None:
@@ -283,7 +297,11 @@ def iter_training_documents(source: Dict[str, Any]) -> Iterator[str]:
 
     if data_files is not None or data_dir is not None:
         raw = _load_dataset_stream(
-            dataset_name, ds_cfg, data_files=data_files, data_dir=data_dir
+            dataset_name,
+            ds_cfg,
+            data_files=data_files,
+            data_dir=data_dir,
+            hub_extra=hub,
         )
         ds = _unwrap_stream(raw)
         for i, row in enumerate(ds):
@@ -295,7 +313,7 @@ def iter_training_documents(source: Dict[str, Any]) -> Iterator[str]:
         return
 
     if source.get("flatten_messages"):
-        raw = _load_dataset_stream(dataset_name, ds_cfg)
+        raw = _load_dataset_stream(dataset_name, ds_cfg, hub_extra=hub)
         ds = _unwrap_stream(raw)
         for i, row in enumerate(ds):
             if i >= max_documents:
@@ -306,7 +324,9 @@ def iter_training_documents(source: Dict[str, Any]) -> Iterator[str]:
                 yield text
         return
 
-    for doc in stream_texts(dataset_name, ds_cfg, text_field, max_documents):
+    for doc in stream_texts(
+        dataset_name, ds_cfg, text_field, max_documents, hub_extra=hub or None
+    ):
         yield doc
 
 

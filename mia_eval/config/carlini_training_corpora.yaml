@@ -16,31 +16,49 @@ defaults:
 
 run_training_corpora:
   # --- OLMo 2 (model card: OLMo-Mix-1124 + Dolmino-Mix-1124) ---
+  # Do **not** use dataset_config: default on allenai/olmo-mix-1124 — it mixes parquet
+  # shards with incompatible schemas (Arrow ``Couldn't cast … provenance``). Load named
+  # subsets (dclm, wiki, …) separately; see https://huggingface.co/datasets/allenai/olmo-mix-1124/discussions/15
   olmo2_7b_base:
-    note: "Stage-1 OLMo-Mix-1124 + stage-2 Dolmino-Mix-1124 (released Hub datasets)."
+    note: "OLMo-Mix-1124 named subsets + Dolmino-Mix-1124 (released Hub datasets)."
     sources:
       - dataset_name: allenai/olmo-mix-1124
-        dataset_config: default
+        dataset_config: dclm
+        verification_mode: no_checks
         text_field: text
-        max_documents: 1200
+        max_documents: 650
+      - dataset_name: allenai/olmo-mix-1124
+        dataset_config: wiki
+        verification_mode: no_checks
+        text_field: text
+        max_documents: 550
       - dataset_name: allenai/dolmino-mix-1124
         dataset_config: default
+        verification_mode: no_checks
         text_field: text
         max_documents: 800
 
   olmo2_7b_instruct:
-    note: "Pretraining mixes above + Tülu 3 SFT mixture (post-train memorization)."
+    note: "OLMo-Mix subsets + Dolmino + Tülu 3 SFT OLMo-2 mixture (messages flattened to text)."
     sources:
       - dataset_name: allenai/olmo-mix-1124
-        dataset_config: default
+        dataset_config: dclm
+        verification_mode: no_checks
         text_field: text
-        max_documents: 800
+        max_documents: 450
+      - dataset_name: allenai/olmo-mix-1124
+        dataset_config: wiki
+        verification_mode: no_checks
+        text_field: text
+        max_documents: 350
       - dataset_name: allenai/dolmino-mix-1124
         dataset_config: default
+        verification_mode: no_checks
         text_field: text
         max_documents: 500
       - dataset_name: allenai/tulu-3-sft-olmo-2-mixture
         dataset_config: default
+        verification_mode: no_checks
         flatten_messages: true
         text_field: text
         max_documents: 700
