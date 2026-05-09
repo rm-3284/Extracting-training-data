@@ -30,9 +30,9 @@
 #   LABEL_SKIP_EXISTING=1     Skip run if samples_labeled.jsonl already exists
 #   LABEL_REUSE_INDEX=1       Reuse training_shingle_index.json if present (no re-stream)
 #   LABEL_SAVE_INDEX=1        Save training_shingle_index.json after build (default: on)
-#   HF_TOKEN                  For gated Hub datasets (e.g. bigcode/the-stack-dedup); or ``huggingface-cli login``
+#   HF_TOKEN                  Gated datasets + **higher Hub rate limits** (strongly recommended vs anonymous)
 #   LEGACY_GENERIC_CORPORA=1  Use old C4/Pile-by-project heuristic instead of YAML corpora
-#   HF_HUB_DOWNLOAD_TIMEOUT   Seconds per file download (increase if Hub read timeouts)
+#   HF_HUB_DOWNLOAD_TIMEOUT   Seconds per file download (default 600 below if unset)
 #
 # If Slurm warns ``Unable to create TMPDIR [/scratch/...]``, Slurm resets TMPDIR to /tmp; this script
 # also sets TMPDIR to /tmp/<user>_carlini_label_tmp when unset or missing.
@@ -61,6 +61,9 @@ export HF_HOME="${HF_HOME:-/n/fs/vision-mix/rm4411/huggingface}"
 export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-$HF_HOME}"
 export HF_DATASETS_CACHE="${HF_DATASETS_CACHE:-${HF_HOME}/datasets}"
 export XDG_CACHE_HOME="${XDG_CACHE_HOME:-/n/fs/vision-mix/rm4411/cache}"
+# Fewer Hub timeouts / fewer anonymous 429s when downloading shards (still use HF_TOKEN if possible).
+export HF_HUB_DOWNLOAD_TIMEOUT="${HF_HUB_DOWNLOAD_TIMEOUT:-600}"
+export HF_HUB_ETAG_TIMEOUT="${HF_HUB_ETAG_TIMEOUT:-120}"
 
 # Gated datasets (StarCoder Stack, etc.)
 if [[ -n "${HF_TOKEN:-}" ]]; then
@@ -125,10 +128,11 @@ import importlib.util
 import subprocess
 import sys
 
-if importlib.util.find_spec("yaml") is None:
-    subprocess.check_call(
-        [sys.executable, "-m", "pip", "install", "-U", "--prefer-binary", "pyyaml"]
-    )
+for mod, pipname in (("yaml", "pyyaml"), ("charset_normalizer", "charset-normalizer")):
+    if importlib.util.find_spec(mod) is None:
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "-U", "--prefer-binary", pipname]
+        )
 PY
 
 python -m mia_eval.label_carlini_extract_samples \

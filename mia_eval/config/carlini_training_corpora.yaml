@@ -10,58 +10,49 @@
 schema_version: 1
 
 defaults:
-  max_shingles: 2000000
+  max_shingles: 20000000
   shingle_chars: 200
   min_match_chars: 150
 
 run_training_corpora:
-  # --- OLMo 2 (model card: OLMo-Mix-1124 + Dolmino-Mix-1124) ---
-  # Do **not** use dataset_config: default on allenai/olmo-mix-1124 — it mixes parquet
-  # shards with incompatible schemas (Arrow ``Couldn't cast … provenance``). Load named
-  # subsets (dclm, wiki, …) separately; see https://huggingface.co/datasets/allenai/olmo-mix-1124/discussions/15
+  # --- OLMo 2 ---
+  # Avoid streaming ``allenai/olmo-mix-1124`` here: Hub rate-limits (429) many parallel shard
+  # GETs, and some ``dclm`` parquet shards still produce Arrow ``Couldn't cast … struct`` when
+  # unified. Instead index **Dolmino-mix-1124** (released stage-2 mixture from the OLMo 2 card)
+  # plus **mlfoundations/dclm-baseline-1.0** (open DCLM-baseline text aligned with Dolmino’s DCLM slice).
   olmo2_7b_base:
-    note: "OLMo-Mix-1124 named subsets + Dolmino-Mix-1124 (released Hub datasets)."
+    note: "Dolmino-mix-1124 + DCLM-baseline (no olmo-mix-1124 Hub shards — avoids 429/schema issues)."
     sources:
-      - dataset_name: allenai/olmo-mix-1124
-        dataset_config: dclm
-        verification_mode: no_checks
-        text_field: text
-        max_documents: 650
-      - dataset_name: allenai/olmo-mix-1124
-        dataset_config: wiki
-        verification_mode: no_checks
-        text_field: text
-        max_documents: 550
       - dataset_name: allenai/dolmino-mix-1124
         dataset_config: default
         verification_mode: no_checks
         text_field: text
-        max_documents: 800
+        max_documents: 12000
+      - dataset_name: mlfoundations/dclm-baseline-1.0
+        dataset_config: null
+        verification_mode: no_checks
+        text_field: text
+        max_documents: 8000
 
   olmo2_7b_instruct:
-    note: "OLMo-Mix subsets + Dolmino + Tülu 3 SFT OLMo-2 mixture (messages flattened to text)."
+    note: "Same pretrain proxies as base + Tülu 3 SFT OLMo-2 mixture (chat rows flattened)."
     sources:
-      - dataset_name: allenai/olmo-mix-1124
-        dataset_config: dclm
-        verification_mode: no_checks
-        text_field: text
-        max_documents: 450
-      - dataset_name: allenai/olmo-mix-1124
-        dataset_config: wiki
-        verification_mode: no_checks
-        text_field: text
-        max_documents: 350
       - dataset_name: allenai/dolmino-mix-1124
         dataset_config: default
         verification_mode: no_checks
         text_field: text
-        max_documents: 500
+        max_documents: 8000
+      - dataset_name: mlfoundations/dclm-baseline-1.0
+        dataset_config: null
+        verification_mode: no_checks
+        text_field: text
+        max_documents: 5000
       - dataset_name: allenai/tulu-3-sft-olmo-2-mixture
         dataset_config: default
         verification_mode: no_checks
         flatten_messages: true
         text_field: text
-        max_documents: 700
+        max_documents: 7000
 
   # --- OLMo 1 (Dolma v1.5 sample — documented for OLMo-7B pretraining) ---
   olmo1_7b_base:
@@ -70,7 +61,7 @@ run_training_corpora:
       - dataset_name: allenai/dolma
         dataset_config: v1_5-sample
         text_field: text
-        max_documents: 2000
+        max_documents: 20000
 
   olmo1_7b_instruct:
     note: "Same Dolma slice as base + optional instruct data (overlap mostly Dolma for indexing)."
@@ -78,7 +69,7 @@ run_training_corpora:
       - dataset_name: allenai/dolma
         dataset_config: v1_5-sample
         text_field: text
-        max_documents: 2000
+        max_documents: 20000
 
   # --- LLM360 Amber (released tokenized chunks — decode with Amber tokenizer) ---
   llm360_amber_base:
@@ -88,12 +79,12 @@ run_training_corpora:
         data_files: train/train_000.jsonl
         tokenizer_for_decode: LLM360/Amber
         token_field: token_ids
-        max_documents: 600
+        max_documents: 6000
       - dataset_name: LLM360/AmberDatasets
         data_files: train/train_001.jsonl
         tokenizer_for_decode: LLM360/Amber
         token_field: token_ids
-        max_documents: 600
+        max_documents: 6000
 
   llm360_amber_chat:
     note: "Primary memorization signal from Amber pretraining shards (chat adds SFT tokens not fully mirrored here)."
@@ -102,12 +93,12 @@ run_training_corpora:
         data_files: train/train_000.jsonl
         tokenizer_for_decode: LLM360/Amber
         token_field: token_ids
-        max_documents: 600
+        max_documents: 6000
       - dataset_name: LLM360/AmberDatasets
         data_files: train/train_001.jsonl
         tokenizer_for_decode: LLM360/Amber
         token_field: token_ids
-        max_documents: 600
+        max_documents: 6000
 
   llm360_amber_safe:
     note: "Same index as Amber base/chat proxy (safety SFT not indexed separately)."
@@ -116,12 +107,12 @@ run_training_corpora:
         data_files: train/train_000.jsonl
         tokenizer_for_decode: LLM360/Amber
         token_field: token_ids
-        max_documents: 600
+        max_documents: 6000
       - dataset_name: LLM360/AmberDatasets
         data_files: train/train_001.jsonl
         tokenizer_for_decode: LLM360/Amber
         token_field: token_ids
-        max_documents: 600
+        max_documents: 6000
 
   # --- Pythia / Dolly (EleutherAI The Pile) ---
   pythia_12b_base:
@@ -130,7 +121,7 @@ run_training_corpora:
       - dataset_name: EleutherAI/the_pile_deduplicated
         dataset_config: null
         text_field: text
-        max_documents: 2000
+        max_documents: 20000
 
   dolly_v2_12b:
     note: "GPT-NeoX + Pile-based Dolly SFT (index uses Pile slice as dominant pretrain overlap)."
@@ -138,7 +129,7 @@ run_training_corpora:
       - dataset_name: EleutherAI/the_pile_deduplicated
         dataset_config: null
         text_field: text
-        max_documents: 2000
+        max_documents: 20000
 
   # --- StarCoder 2 (BigCode near-dedup Stack — may require HF auth for some hubs) ---
   starcoder2_15b_base:
@@ -148,7 +139,7 @@ run_training_corpora:
         dataset_config: null
         data_dir: data/python
         text_field: content
-        max_documents: 2000
+        max_documents: 20000
 
   starcoder2_15b_instruct:
     note: "Same Stack slice as base for memorization proxy."
@@ -157,7 +148,7 @@ run_training_corpora:
         dataset_config: null
         data_dir: data/python
         text_field: content
-        max_documents: 2000
+        max_documents: 20000
 
   # --- RedPajama ---
   redpajama_7b_base:
@@ -166,7 +157,7 @@ run_training_corpora:
       - dataset_name: togethercomputer/RedPajama-Data-1T
         dataset_config: default
         text_field: text
-        max_documents: 2000
+        max_documents: 20000
 
   redpajama_7b_chat:
     note: "Same pretraining corpus slice + RLHF data not indexed separately."
@@ -174,7 +165,7 @@ run_training_corpora:
       - dataset_name: togethercomputer/RedPajama-Data-1T
         dataset_config: default
         text_field: text
-        max_documents: 2000
+        max_documents: 20000
 
   # --- DCLM (Apple / OpenLM — DCLM-baseline public release) ---
   dclm_7b_base:
@@ -183,7 +174,7 @@ run_training_corpora:
       - dataset_name: mlfoundations/dclm-baseline-1.0
         dataset_config: null
         text_field: text
-        max_documents: 2000
+        max_documents: 20000
 
   dclm_7b_instruct:
     note: "Instruction checkpoint — baseline text overlap via DCLM-baseline slice."
@@ -191,4 +182,4 @@ run_training_corpora:
       - dataset_name: mlfoundations/dclm-baseline-1.0
         dataset_config: null
         text_field: text
-        max_documents: 2000
+        max_documents: 20000
