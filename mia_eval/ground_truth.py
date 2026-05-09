@@ -6,7 +6,7 @@ import hashlib
 import json
 import re
 from pathlib import Path
-from typing import Iterable, Iterator, Optional, Set
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Set
 
 WHITESPACE = re.compile(r"\s+")
 
@@ -144,4 +144,189 @@ def build_index_from_hf(
         if remaining <= 0:
             break
         idx.add_document(doc, max_new=min(50000, remaining))
+    return idx
+
+
+def _load_dataset_stream(
+    dataset_name: str,
+    dataset_config: Optional[str],
+    *,
+    data_files: Any = None,
+    data_dir: Any = None,
+) -> Any:
+    """``split=train`` streaming, with optional Parquet/JSONL ``data_files`` or ``data_dir`` (e.g. The Stack)."""
+    from datasets import load_dataset
+
+    if dataset_name == "togethercomputer/RedPajama-Data-1T" and not dataset_config:
+        dataset_config = "default"
+
+    base_kw: Dict[str, Any] = {
+        "split": "train",
+        "streaming": True,
+        "trust_remote_code": True,
+    }
+    if data_files is not None:
+        base_kw["data_files"] = data_files
+    if data_dir is not None:
+        base_kw["data_dir"] = data_dir
+
+    def _try(kw: Dict[str, Any]) -> Any:
+        if dataset_config:
+            return load_dataset(dataset_name, dataset_config, **kw)
+        return load_dataset(dataset_name, **kw)
+
+    try:
+        return _try(dict(base_kw))
+    except Exception:
+        kw2 = dict(base_kw)
+        kw2.pop("trust_remote_code", None)
+        return _try(kw2)
+
+
+def _unwrap_stream(ds: Any) -> Any:
+    """If ``load_dataset`` returns a ``DatasetDict``, use ``train``."""
+    try:
+        from datasets import DatasetDict
+
+        if isinstance(ds, DatasetDict) and "train" in ds:
+            return ds["train"]
+    except Exception:
+        pass
+    if isinstance(ds, dict) and "train" in ds:
+        return ds["train"]
+    return ds
+
+
+def _extract_doc_text(row: Dict[str, Any], source: Dict[str, Any]) -> str:
+    """Pull document text from a dataset row (plain ``text`` / ``content`` or chat ``messages``)."""
+    if source.get("flatten_messages"):
+        msgs = row.get("messages")
+        if isinstance(msgs, list):
+            parts: List[str] = []
+            for m in msgs:
+                if isinstance(m, dict):
+                    parts.append(str(m.get("content", "")))
+            return "\n".join(parts)
+    tf = str(source.get("text_field", "text"))
+    text = row.get(tf) or row.get("content") or ""
+    return text if isinstance(text, str) else ""
+
+
+def iter_training_documents(source: Dict[str, Any]) -> Iterator[str]:
+    """
+    Yield text from a single **open** training-corpus spec (from YAML ``sources``).
+
+    Two modes:
+      * **Text rows:** standard HF ``text`` (or ``content``) field.
+      * **Token rows:** ``tokenizer_for_decode`` + ``token_field`` (e.g. LLM360/AmberDatasets
+        ``token_ids``) — decode with that model's tokenizer to text, then shingle.
+    """
+    max_documents = int(source.get("max_documents", 2000))
+    tok_ref = source.get("tokenizer_for_decode") or source.get("tokenizer_model_id")
+
+    if tok_ref:
+        from datasets import load_dataset
+        from transformers import AutoTokenizer
+
+        tok = AutoTokenizer.from_pretrained(str(tok_ref), trust_remote_code=True)
+        token_field = str(source.get("token_field", "token_ids"))
+        ds_name = str(source["dataset_name"])
+        ds_cfg = source.get("dataset_config")
+        if ds_cfg in ("", None):
+            ds_cfg = None
+        data_files = source.get("data_files")
+
+        raw = None
+        last_err: Optional[BaseException] = None
+        attempts: List[Dict[str, Any]] = [
+            dict(split="train", streaming=True, trust_remote_code=True),
+            dict(streaming=True, trust_remote_code=True),
+        ]
+        if data_files is not None:
+            for a in attempts:
+                a["data_files"] = data_files
+        for extra in attempts:
+            try:
+                if ds_cfg is not None:
+                    raw = load_dataset(ds_name, ds_cfg, **extra)
+                else:
+                    raw = load_dataset(ds_name, **extra)
+                break
+            except Exception as e:
+                last_err = e
+        if raw is None:
+            raise RuntimeError(
+                f"Could not stream {ds_name!r} with tokenizer decode (data_files={data_files!r})"
+            ) from last_err
+        ds = _unwrap_stream(raw)
+        for i, row in enumerate(ds):
+            if i >= max_documents:
+                break
+            ids = row.get(token_field)
+            if ids is None:
+                continue
+            if hasattr(ids, "tolist"):
+                ids = ids.tolist()
+            if isinstance(ids, list) and len(ids) > 0:
+                text = tok.decode(ids)
+                if len(text) > 50:
+                    yield text
+        return
+
+    dataset_name = str(source["dataset_name"])
+    ds_cfg = source.get("dataset_config")
+    if ds_cfg in ("", None):
+        ds_cfg = None
+    text_field = str(source.get("text_field", "text"))
+    data_files = source.get("data_files")
+    data_dir = source.get("data_dir")
+
+    if data_files is not None or data_dir is not None:
+        raw = _load_dataset_stream(
+            dataset_name, ds_cfg, data_files=data_files, data_dir=data_dir
+        )
+        ds = _unwrap_stream(raw)
+        for i, row in enumerate(ds):
+            if i >= max_documents:
+                break
+            text = _extract_doc_text(row, source)
+            if isinstance(text, str) and len(text) > 50:
+                yield text
+        return
+
+    if source.get("flatten_messages"):
+        raw = _load_dataset_stream(dataset_name, ds_cfg)
+        ds = _unwrap_stream(raw)
+        for i, row in enumerate(ds):
+            if i >= max_documents:
+                break
+            r = dict(row) if not isinstance(row, dict) else row
+            text = _extract_doc_text(r, source)
+            if isinstance(text, str) and len(text) > 50:
+                yield text
+        return
+
+    for doc in stream_texts(dataset_name, ds_cfg, text_field, max_documents):
+        yield doc
+
+
+def build_index_from_training_sources(
+    sources: List[Dict[str, Any]],
+    shingle_chars: int,
+    max_shingles: int,
+) -> TrainingShingleIndex:
+    """
+    Build a shingle index by streaming **multiple** public training sources in order
+    (model cards / Hub releases) until ``max_shingles`` unique hashes are stored.
+    """
+    if not sources:
+        raise ValueError("training sources list is empty")
+    idx = TrainingShingleIndex(shingle_chars)
+    for spec in sources:
+        s = spec if isinstance(spec, dict) else dict(spec)
+        for doc in iter_training_documents(s):
+            remaining = max(0, max_shingles - len(idx))
+            if remaining <= 0:
+                return idx
+            idx.add_document(doc, max_new=min(50_000, remaining))
     return idx

@@ -35,6 +35,29 @@ def orient_scores_full(
         return s
 
 
+def precision_at_k(
+    scores: np.ndarray,
+    labels: np.ndarray,
+    k: int,
+    *,
+    lower_better: bool,
+) -> float:
+    """
+    Fraction of positives among the top-k samples when sorting by ``scores``.
+    ``labels``: binary (1 = member / positive class for the metric).
+    ``lower_better``: if True, sort ascending (smallest scores first).
+    """
+    scores = np.asarray(scores, dtype=np.float64)
+    labels = np.asarray(labels, dtype=np.float64)
+    if k <= 0 or k > len(scores):
+        return float("nan")
+    if lower_better:
+        top_k_idx = np.argsort(scores)[:k]
+    else:
+        top_k_idx = np.argsort(scores)[::-1][:k]
+    return float(labels[top_k_idx].mean())
+
+
 def split_masks(
     y: np.ndarray,
     test_fraction: float,
