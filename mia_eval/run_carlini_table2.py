@@ -56,7 +56,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from mia_eval.config_loader import active_model_bundle, load_merged_config, apply_dot_overrides
-from mia_eval.evaluation_common import jsonable as _jsonable
+from mia_eval.evaluation_common import jsonable as _jsonable, precision_at_k
 from mia_eval.model_utils import load_causal_lm, pick_device, torch_dtype_from_str
 
 
@@ -217,22 +217,6 @@ def _proxy_precision_at_k_block(
         for k in ks:
             out[pkey][f"@{k}"] = precision_at_k(carlini_scores, yp, k, lower_better=lower_better)
     return out
-
-
-def precision_at_k(
-    scores: np.ndarray,
-    labels: np.ndarray,
-    k: int,
-    *,
-    lower_better: bool,
-) -> float:
-    if k <= 0 or k > len(scores):
-        return float("nan")
-    if lower_better:
-        top_k_idx = np.argsort(scores)[:k]
-    else:
-        top_k_idx = np.argsort(scores)[::-1][:k]
-    return float(labels[top_k_idx].mean())
 
 
 def load_texts_labels_and_mia_primary(

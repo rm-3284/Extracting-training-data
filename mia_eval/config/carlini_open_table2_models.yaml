@@ -1,0 +1,102 @@
+# Merge over ``mia_eval/config/defaults.yaml`` so ``active_model`` matches each
+# ``carlini_open_models.yaml`` ``run_key``. Used by Carlini Table-2 / precision@k scoring.
+#
+# Reference models: smaller/in-family checkpoints where possible so the ``Small`` ratio
+# is informative. LLM360 Amber line has no public sub-7B mate in the same tokenizer line;
+# we use LLM360/Crystal (7B) as ref — ratios are still defined but less separated than
+# with a 1B–3B ref. Override ``reference_model`` in a local YAML if you prefer.
+#
+# Run batch scoring:
+#   python -m mia_eval.run_carlini_table2_carlini_extract --help
+
+models:
+  olmo2_7b_base:
+    target_model: allenai/OLMo-2-1124-7B
+    reference_model: allenai/OLMo-2-0425-1B
+    tokenizer: allenai/OLMo-2-1124-7B
+    torch_dtype: bfloat16
+
+  olmo2_7b_instruct:
+    target_model: allenai/OLMo-2-1124-7B-Instruct
+    reference_model: allenai/OLMo-2-0425-1B
+    tokenizer: allenai/OLMo-2-1124-7B-Instruct
+    torch_dtype: bfloat16
+
+  olmo1_7b_base:
+    target_model: allenai/OLMo-7B
+    reference_model: allenai/OLMo-1B-0724-hf
+    tokenizer: allenai/OLMo-7B
+    torch_dtype: bfloat16
+
+  olmo1_7b_instruct:
+    target_model: allenai/OLMo-7B-Instruct
+    reference_model: allenai/OLMo-1B-0724-hf
+    tokenizer: allenai/OLMo-7B-Instruct
+    torch_dtype: bfloat16
+
+  llm360_amber_base:
+    target_model: LLM360/Amber
+    reference_model: LLM360/Crystal
+    tokenizer: LLM360/Amber
+    torch_dtype: float16
+
+  llm360_amber_chat:
+    target_model: LLM360/AmberChat
+    reference_model: LLM360/Crystal
+    tokenizer: LLM360/AmberChat
+    torch_dtype: float16
+
+  llm360_amber_safe:
+    target_model: LLM360/AmberSafe
+    reference_model: LLM360/Crystal
+    tokenizer: LLM360/AmberSafe
+    torch_dtype: float16
+
+  pythia_12b_base:
+    target_model: EleutherAI/pythia-12b
+    reference_model: EleutherAI/pythia-160m
+    tokenizer: EleutherAI/pythia-12b
+    torch_dtype: float16
+
+  dolly_v2_12b:
+    target_model: ethzanalytics/dolly-v2-12b-sharded
+    reference_model: EleutherAI/pythia-160m
+    tokenizer: ethzanalytics/dolly-v2-12b-sharded
+    torch_dtype: float16
+
+  starcoder2_15b_base:
+    target_model: bigcode/starcoder2-15b
+    reference_model: bigcode/starcoder2-3b
+    tokenizer: bigcode/starcoder2-15b
+    torch_dtype: float16
+
+  starcoder2_15b_instruct:
+    target_model: bigcode/starcoder2-15b-instruct-v0.1
+    reference_model: bigcode/starcoder2-3b
+    tokenizer: bigcode/starcoder2-15b-instruct-v0.1
+    torch_dtype: float16
+
+  redpajama_7b_base:
+    target_model: togethercomputer/RedPajama-INCITE-7B-Base
+    reference_model: togethercomputer/RedPajama-INCITE-Base-3B-v1
+    tokenizer: togethercomputer/RedPajama-INCITE-7B-Base
+    torch_dtype: float16
+
+  redpajama_7b_chat:
+    target_model: togethercomputer/RedPajama-INCITE-7B-Chat
+    reference_model: togethercomputer/RedPajama-INCITE-Base-3B-v1
+    tokenizer: togethercomputer/RedPajama-INCITE-7B-Chat
+    torch_dtype: float16
+
+  # OpenLM stack; ``reference_model`` uses same vocab_size (50432) as Apple DCLM-7B — OK with target tokenizer ids.
+  dclm_7b_base:
+    target_model: apple/DCLM-7B
+    reference_model: TRI-ML/DCLM-1B
+    tokenizer: apple/DCLM-7B
+    torch_dtype: bfloat16
+
+  dclm_7b_instruct:
+    target_model: mlfoundations/dclm-7b-it
+    reference_model: TRI-ML/DCLM-1B
+    tokenizer: mlfoundations/dclm-7b-it
+    torch_dtype: bfloat16
