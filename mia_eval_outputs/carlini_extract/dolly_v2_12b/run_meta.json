@@ -1,8 +1,8 @@
 {
   "run_key": "dolly_v2_12b",
   "project": "Pythia",
-  "hf_model_id": "databricks/dolly-v2-12b",
-  "tokenizer": "databricks/dolly-v2-12b",
+  "hf_model_id": "ethzanalytics/dolly-v2-12b-sharded",
+  "tokenizer": "ethzanalytics/dolly-v2-12b-sharded",
   "torch_dtype": "float16",
   "variant": "post_train",
   "post_training": "SFT (Databricks-Dolly)",

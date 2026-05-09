@@ -8,7 +8,37 @@
       "status": "ok",
       "samples_jsonl": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract/starcoder2_15b_base/samples.jsonl",
       "run_meta": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract/starcoder2_15b_base/run_meta.json"
+    },
+    {
+      "run_key": "olmo1_7b_base",
+      "status": "ok",
+      "samples_jsonl": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract/olmo1_7b_base/samples.jsonl",
+      "run_meta": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract/olmo1_7b_base/run_meta.json"
+    },
+    {
+      "run_key": "olmo1_7b_instruct",
+      "status": "ok",
+      "samples_jsonl": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract/olmo1_7b_instruct/samples.jsonl",
+      "run_meta": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract/olmo1_7b_instruct/run_meta.json"
+    },
+    {
+      "run_key": "dclm_7b_base",
+      "status": "ok",
+      "samples_jsonl": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract/dclm_7b_base/samples.jsonl",
+      "run_meta": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract/dclm_7b_base/run_meta.json"
+    },
+    {
+      "run_key": "dclm_7b_instruct",
+      "status": "ok",
+      "samples_jsonl": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract/dclm_7b_instruct/samples.jsonl",
+      "run_meta": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract/dclm_7b_instruct/run_meta.json"
+    },
+    {
+      "run_key": "dolly_v2_12b",
+      "status": "ok",
+      "samples_jsonl": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract/dolly_v2_12b/samples.jsonl",
+      "run_meta": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract/dolly_v2_12b/run_meta.json"
     }
   ],
-  "finished_utc": "2026-05-06T13:18:44.665285+00:00"
+  "finished_utc": "2026-05-09T01:29:20.688782+00:00"
 }
