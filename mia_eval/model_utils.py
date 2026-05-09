@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 import os
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import torch
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, PreTrainedModel
@@ -54,6 +54,85 @@ def _dtype_kwargs_for_from_pretrained(torch_dtype: torch.dtype) -> Dict[str, Any
     except (TypeError, ValueError):
         pass
     return {"torch_dtype": torch_dtype}
+
+
+def _ensure_transformers_head_pruning_compat() -> None:
+    """Backfill attention-head pruning helpers removed in Transformers 5.
+
+    Hub checkpoints such as ``LLM360/Crystal`` ship ``modeling_*.py`` that still import
+    ``find_pruneable_heads_and_indices`` / ``prune_conv1d_layer`` from
+    ``transformers.pytorch_utils`` (removed in `PR #41417`_). Inference does not use these;
+    they only need to exist for module import.
+
+    .. _PR #41417: https://github.com/huggingface/transformers/pull/41417
+    """
+    try:
+        import transformers.pytorch_utils as pu
+    except ImportError:
+        return
+    if hasattr(pu, "find_pruneable_heads_and_indices") and hasattr(pu, "prune_conv1d_layer"):
+        return
+
+    Conv1D = getattr(pu, "Conv1D", None)
+    if Conv1D is None:
+
+        class Conv1D(torch.nn.Module):
+            """GPT-style linear-as-conv (matches pre-v5 ``pytorch_utils.Conv1D``)."""
+
+            def __init__(self, nf: int, nx: int):
+                super().__init__()
+                self.nf = nf
+                self.nx = nx
+                self.weight = torch.nn.Parameter(torch.empty(nx, nf))
+                self.bias = torch.nn.Parameter(torch.zeros(nf))
+                torch.nn.init.normal_(self.weight, std=0.02)
+
+            def forward(self, x: torch.Tensor) -> torch.Tensor:
+                size_out = x.size()[:-1] + (self.nf,)
+                x = torch.addmm(self.bias, x.view(-1, x.size(-1)), self.weight)
+                return x.view(size_out)
+
+        pu.Conv1D = Conv1D
+    else:
+        Conv1D = pu.Conv1D
+
+    def prune_conv1d_layer(layer: Any, index: torch.LongTensor, dim: int = 1) -> Any:
+        index = index.to(layer.weight.device)
+        W = layer.weight.index_select(dim, index).clone().detach()
+        if dim == 0:
+            b = layer.bias.clone().detach()
+        else:
+            b = layer.bias[index].clone().detach()
+        new_size = list(layer.weight.size())
+        new_size[dim] = len(index)
+        new_layer = Conv1D(new_size[1], new_size[0]).to(layer.weight.device)
+        new_layer.weight.requires_grad = False
+        new_layer.weight.copy_(W.contiguous())
+        new_layer.weight.requires_grad = True
+        new_layer.bias.requires_grad = False
+        new_layer.bias.copy_(b.contiguous())
+        new_layer.bias.requires_grad = True
+        return new_layer
+
+    def find_pruneable_heads_and_indices(
+        heads: List[int],
+        n_heads: int,
+        head_size: int,
+        already_pruned_heads: Set[int],
+    ) -> Tuple[Set[int], torch.LongTensor]:
+        mask = torch.ones(n_heads, head_size)
+        heads_set = set(heads) - already_pruned_heads
+        for head in heads_set:
+            head_adj = head - sum(1 if h < head else 0 for h in already_pruned_heads)
+            mask[head_adj] = 0
+        mask = mask.view(-1).contiguous().eq(1)
+        index = torch.arange(len(mask), device=mask.device)[mask].long()
+        return heads_set, index
+
+    if not hasattr(pu, "prune_conv1d_layer"):
+        pu.prune_conv1d_layer = prune_conv1d_layer
+    if not hasattr(pu, "find_pruneable_heads_and_indices"):
+        pu.find_pruneable_heads_and_indices = find_pruneable_heads_and_indices
 
 
 def _from_pretrained_causal_lm(model_name: str, kwargs: Dict[str, Any]) -> Any:
@@ -366,6 +445,7 @@ def load_causal_lm(
         ensure_openlm_hf_registered()
 
     _ensure_tied_weights_attr_for_compat(model_name)
+    _ensure_transformers_head_pruning_compat()
 
     if _olmo_dbg:
         print(
