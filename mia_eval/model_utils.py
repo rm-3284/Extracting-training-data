@@ -218,6 +218,62 @@ def _ensure_llm360_crystal_config_kwargs(model_name: str, kwargs: Dict[str, Any]
     kwargs["config"] = cfg
 
 
+def _crystal_convert_head_mask_to_5d(self: Any, head_mask: Any, num_hidden_layers: int) -> Any:
+    """Subset of legacy ``PreTrainedModel._convert_head_mask_to_5d`` for Hub Crystal stack."""
+
+    if head_mask.dim() == 1:
+        head_mask = head_mask.unsqueeze(0).unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
+        head_mask = head_mask.expand(num_hidden_layers, -1, -1, -1, -1)
+    elif head_mask.dim() == 2:
+        head_mask = head_mask.unsqueeze(1).unsqueeze(-1).unsqueeze(-1)
+    if head_mask.dim() != 5:
+        raise ValueError(f"head_mask.dim != 5, instead {head_mask.dim()}")
+    dt = getattr(self, "dtype", None)
+    if dt is None:
+        dt = next(self.parameters()).dtype
+    return head_mask.to(dtype=dt)
+
+
+def _crystal_get_head_mask(
+    self: Any,
+    head_mask: Any,
+    num_hidden_layers: int,
+    is_attention_chunked: bool = False,
+) -> Any:
+    """Subset of legacy ``PreTrainedModel.get_head_mask`` (removed upstream in TF5)."""
+
+    if head_mask is not None:
+        head_mask = self._convert_head_mask_to_5d(head_mask, num_hidden_layers)
+        if is_attention_chunked is True:
+            head_mask = head_mask.unsqueeze(-1)
+    else:
+        head_mask = [None] * num_hidden_layers
+    return head_mask
+
+
+def _ensure_crystal_head_mask_methods(model: Any) -> None:
+    """``CrystalCoderModel`` calls ``get_head_mask`` / ``_convert_head_mask_to_5d`` from older Transformers."""
+
+    inner: Any = None
+    if type(model).__name__ == "CrystalCoderForCausalLM" and getattr(model, "transformer", None) is not None:
+        inner = model.transformer
+    elif type(model).__name__ == "CrystalCoderModel":
+        inner = model
+    if inner is None:
+        return
+
+    cls = type(inner)
+    if getattr(cls, "_mia_eval_crystal_head_mask_patched", False):
+        return
+    if hasattr(cls, "get_head_mask") and callable(getattr(cls, "get_head_mask")):
+        cls._mia_eval_crystal_head_mask_patched = True
+        return
+
+    cls._convert_head_mask_to_5d = _crystal_convert_head_mask_to_5d
+    cls.get_head_mask = _crystal_get_head_mask
+    cls._mia_eval_crystal_head_mask_patched = True
+
+
 def _from_pretrained_causal_lm(model_name: str, kwargs: Dict[str, Any]) -> Any:
     try:
         return AutoModelForCausalLM.from_pretrained(model_name, **kwargs)
@@ -548,6 +604,7 @@ def load_causal_lm(
         else:
             raise
     _normalize_all_tied_weights_keys(model)
+    _ensure_crystal_head_mask_methods(model)
     _ensure_dynamic_cache_flag(model)
     _ensure_tie_weights_signature_compat(model)
     _ensure_generation_methods(model)
