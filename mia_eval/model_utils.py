@@ -193,6 +193,31 @@ def _ensure_transformers_model_parallel_utils_compat() -> None:
     sys.modules["transformers.utils.model_parallel_utils"] = mpu
 
 
+def _ensure_llm360_crystal_config_kwargs(model_name: str, kwargs: Dict[str, Any]) -> None:
+    """Hub ``CrystalCoderConfig`` predates fields CrystalCoderBlock still reads (GPT-NeoX-style).
+
+    Without ``add_cross_attention``, newer ``PretrainedConfig.__getattribute__`` raises and
+    ``CrystalCoderBlock.__init__`` fails mid-build.
+    """
+    if "crystal" not in model_name.lower():
+        return
+
+    cfg_kw: Dict[str, Any] = {"trust_remote_code": kwargs.get("trust_remote_code", True)}
+    if kwargs.get("token"):
+        cfg_kw["token"] = kwargs["token"]
+
+    if kwargs.get("config") is not None:
+        cfg = kwargs["config"]
+    else:
+        cfg = AutoConfig.from_pretrained(model_name, **cfg_kw)
+
+    _missing = object()
+    if getattr(cfg, "add_cross_attention", _missing) is _missing:
+        cfg.add_cross_attention = False
+
+    kwargs["config"] = cfg
+
+
 def _from_pretrained_causal_lm(model_name: str, kwargs: Dict[str, Any]) -> Any:
     try:
         return AutoModelForCausalLM.from_pretrained(model_name, **kwargs)
@@ -505,6 +530,7 @@ def load_causal_lm(
     _ensure_tied_weights_attr_for_compat(model_name)
     _ensure_transformers_head_pruning_compat()
     _ensure_transformers_model_parallel_utils_compat()
+    _ensure_llm360_crystal_config_kwargs(model_name, kwargs)
 
     if _olmo_dbg:
         print(
