@@ -135,6 +135,64 @@ def _ensure_transformers_head_pruning_compat() -> None:
         pu.find_pruneable_heads_and_indices = find_pruneable_heads_and_indices
 
 
+def _ensure_transformers_model_parallel_utils_compat() -> None:
+    """Backfill ``transformers.utils.model_parallel_utils`` removed in newer Transformers.
+
+    Hub checkpoints such as ``LLM360/Crystal`` still import ``assert_device_map`` /
+    ``get_device_map``. Normal single-GPU ``from_pretrained`` does not exercise these;
+    they must exist at import time only (logic matches pre-removal `Transformers 4.x`_).
+
+    .. _Transformers 4.x: https://github.com/huggingface/transformers/blob/v4.46.3/src/transformers/utils/model_parallel_utils.py
+    """
+    try:
+        import transformers.utils.model_parallel_utils  # noqa: F401
+        return
+    except ModuleNotFoundError:
+        pass
+
+    import sys
+    import types
+    from math import ceil
+
+    def assert_device_map(device_map: Any, num_blocks: int) -> None:
+        blocks = list(range(0, num_blocks))
+        device_map_blocks = [item for sublist in list(device_map.values()) for item in sublist]
+        duplicate_blocks: List[int] = []
+        for i in device_map_blocks:
+            if device_map_blocks.count(i) > 1 and i not in duplicate_blocks:
+                duplicate_blocks.append(i)
+        missing_blocks = [i for i in blocks if i not in device_map_blocks]
+        extra_blocks = [i for i in device_map_blocks if i not in blocks]
+        if duplicate_blocks:
+            raise ValueError(
+                "Duplicate attention blocks specified in device_map. Attention blocks must be specified to one device."
+                " These attention blocks were specified more than once: "
+                + str(duplicate_blocks)
+            )
+        if missing_blocks:
+            raise ValueError(
+                "There are attention blocks for this model that are not specified in the device_map. Add these attention "
+                "blocks to a device on the device_map: "
+                + str(missing_blocks)
+            )
+        if extra_blocks:
+            raise ValueError(
+                "The device_map contains more attention blocks than this model has. Remove these from the device_map:"
+                + str(extra_blocks)
+            )
+
+    def get_device_map(n_layers: int, devices: List[Any]) -> Dict[Any, List[int]]:
+        layers = list(range(n_layers))
+        n_blocks = int(ceil(n_layers / len(devices)))
+        layers_list = [layers[i : i + n_blocks] for i in range(0, n_layers, n_blocks)]
+        return dict(zip(devices, layers_list))
+
+    mpu = types.ModuleType("model_parallel_utils")
+    mpu.assert_device_map = assert_device_map
+    mpu.get_device_map = get_device_map
+    sys.modules["transformers.utils.model_parallel_utils"] = mpu
+
+
 def _from_pretrained_causal_lm(model_name: str, kwargs: Dict[str, Any]) -> Any:
     try:
         return AutoModelForCausalLM.from_pretrained(model_name, **kwargs)
@@ -446,6 +504,7 @@ def load_causal_lm(
 
     _ensure_tied_weights_attr_for_compat(model_name)
     _ensure_transformers_head_pruning_compat()
+    _ensure_transformers_model_parallel_utils_compat()
 
     if _olmo_dbg:
         print(
