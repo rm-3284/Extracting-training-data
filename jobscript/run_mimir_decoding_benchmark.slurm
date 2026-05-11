@@ -55,6 +55,8 @@
 #   BENCH_ARGS        optional extra CLI tokens (unquoted expansion), e.g.:
 #                       export BENCH_ARGS="--verbose --seed 1 --models gpt_neo_2p7"
 #   MIMIR_BENCH_SINGLE_MODEL  if set, passed as --models <key> (used by array Slurm; rarely needed manually)
+#   MIMIR_FAST_LEGACY_LOGPROB=1, MIMIR_INFILLING_PENALTY_SIGN, MIMIR_FAST_INFILLING_WINDOW/M/K
+#   MIMIR_WBC_REFERENCE_MODEL (+ MIMIR_WBC_LAMBDA, MIMIR_WBC_GATE_EVERY, MIMIR_WBC_SHARE_TARGET_TOKENIZER=1, …)
 #   HF_HOME           Hugging Face cache (defaults under PROJECT_ROOT below)
 
 set -euo pipefail

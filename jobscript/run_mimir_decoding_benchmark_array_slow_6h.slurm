@@ -23,6 +23,10 @@
 #   export MIMIR_EXAMPLE_SHARDS=4      # must match (last_task_id + 1) / N_MODELS
 #   export MIMIR_EXAMPLES_PER_SHARD=6   # N_EXAMPLES per task; total ≈ SHARDS * PER_SHARD
 #
+# Same optional decoding flags as run_mimir_decoding_benchmark_array.slurm (see header there):
+#   MIMIR_FAST_LEGACY_LOGPROB, MIMIR_INFILLING_PENALTY_SIGN, MIMIR_FAST_INFILLING_*,
+#   MIMIR_WBC_REFERENCE_MODEL (+ MIMIR_WBC_* , MIMIR_WBC_SHARE_TARGET_TOKENIZER=1). WBC needs extra GPU RAM.
+#
 # Submit:
 #   mkdir -p logs && export HF_TOKEN="hf_..."
 #   sbatch --export=ALL,HF_TOKEN="$HF_TOKEN" jobscript/run_mimir_decoding_benchmark_array_slow_6h.slurm

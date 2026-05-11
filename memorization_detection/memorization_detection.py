@@ -1,11 +1,21 @@
 import sys
 import os
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import torch
 import torch.nn.functional as F
-from transformers import AutoTokenizer, AutoModelForCausalLM
-from infilling_score.infilling_score import infilling_score
 from datasets import load_dataset
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from infilling_score.infilling_score import infilling_score
+
+try:
+    from mia_eval.losses import per_token_nll
+    from wbc_attack.core import WBCConfig, wbc_score_from_losses
+except ImportError:
+    per_token_nll = None
+    wbc_score_from_losses = None
+    WBCConfig = None
 
 
 
@@ -98,6 +108,9 @@ def prefix_infilling_score(model, tokenizer, prefix_text, window=64, m=5, k=0.1)
 DEFAULT_DECODE_TOP_K = 20
 DEFAULT_GATE_GAMMA = 5.0
 
+# WBC gate cache (full-sequence score is expensive; refresh every N decode steps).
+WBC_GATE_CACHE = {"step": -1, "gate": 0.0}
+
 
 def _minmax01_1d(x: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
     """Map 1D tensor to [0, 1] with min -> 0, max -> 1 (equal values -> zeros)."""
@@ -151,6 +164,7 @@ def risk_aware_next_token_slow(
     m=5,
     k=0.1,
     gate_gamma=DEFAULT_GATE_GAMMA,
+    infilling_penalty_sign: float = 1.0,
 ):
     outputs = model(input_ids=input_ids, attention_mask=attention_mask)
     logits = outputs.logits[:, -1, :]
@@ -187,16 +201,137 @@ def risk_aware_next_token_slow(
     risks = torch.nan_to_num(risks, nan=prefix_risk, posinf=prefix_risk, neginf=0.0)
     g = _minmax01_1d(risks)
 
-    adjusted_log_probs = topk_log_probs[0] - lambda_penalty * gate * g
+    adjusted_log_probs = topk_log_probs[0] - (
+        lambda_penalty * gate * g * float(infilling_penalty_sign)
+    )
     adjusted_probs = _safe_probs_from_log_probs(adjusted_log_probs)
 
     sampled_index = torch.multinomial(adjusted_probs, num_samples=1).item()
     return topk_ids[0, sampled_index].item()
 
 
-# Version 2: fast — sigmoid(prefix risk) * min-max log-prob danger among top-k.
-# Cost: default one infilling call per token (risk_every=1); optional cache if risk_every>1.
+# Version 2: fast — prefix infilling gate; candidate scores either per-token infilling (default,
+# aligns with slow / non-member steering) or legacy min-max log-prob within top-k.
+# Cost: default top_k+1 infilling calls per token when use_candidate_infilling=True.
 RISK_CACHE = {"step": -1, "risk": 0.0}
+
+
+def _wbc_gate_from_text(
+    model,
+    ref_model,
+    tokenizer,
+    ref_tokenizer,
+    text: str,
+    device: torch.device,
+    wbc_config,
+    min_aligned: int = 4,
+) -> float:
+    if per_token_nll is None or wbc_score_from_losses is None or WBCConfig is None:
+        return 0.0
+    nt = per_token_nll(model, tokenizer, text, device)
+    nr = per_token_nll(ref_model, ref_tokenizer, text, device)
+    n = min(len(nt), len(nr))
+    if n < min_aligned:
+        return 0.0
+    nt = nt[-n:]
+    nr = nr[-n:]
+    cfg = wbc_config if wbc_config is not None else WBCConfig()
+    return _safe_float(wbc_score_from_losses(nt, nr, config=cfg), default=0.0)
+
+
+@torch.no_grad()
+def wbc_aware_next_token(
+    model,
+    ref_model,
+    tokenizer,
+    ref_tokenizer,
+    input_ids,
+    attention_mask,
+    top_k=DEFAULT_DECODE_TOP_K,
+    temperature=1.0,
+    lambda_contrast=0.5,
+    lambda_infilling=0.3,
+    gate_gamma=DEFAULT_GATE_GAMMA,
+    wbc_gate_gamma: float | None = None,
+    wbc_gate_every: int = 4,
+    step: int = 0,
+    wbc_config=None,
+    infilling_window=64,
+    infilling_m=5,
+    infilling_k=0.1,
+    infilling_penalty_sign: float = 1.0,
+):
+    """
+    Window-based comparison (WBC) gated decoding: high WBC score => more member-like under
+    arXiv:2601.02751; combine with infilling candidate scores. When target/ref share vocabulary
+    (same tokenizer object or equal vocab_size), add contrastive logit shift toward tokens the
+    reference assigns relatively higher probability than the target.
+    """
+    device = input_ids.device
+
+    outputs_t = model(input_ids=input_ids, attention_mask=attention_mask)
+    lt_full = F.log_softmax(outputs_t.logits[:, -1, :] / temperature, dim=-1)
+    topk_log_probs, topk_ids = torch.topk(lt_full, k=top_k, dim=-1)
+
+    prefix_text = tokenizer.decode(input_ids[0].detach().cpu(), skip_special_tokens=False)
+
+    prefix_risk = _safe_float(
+        prefix_infilling_score(
+            model, tokenizer, prefix_text, window=infilling_window, m=infilling_m, k=infilling_k
+        ),
+        default=0.0,
+    )
+    gate_inf = torch.sigmoid(
+        torch.tensor(gate_gamma * prefix_risk, device=device, dtype=topk_log_probs.dtype)
+    )
+
+    wgg = float(wbc_gate_gamma if wbc_gate_gamma is not None else gate_gamma)
+    if wbc_gate_every <= 1 or step % wbc_gate_every == 0 or WBC_GATE_CACHE["step"] < 0:
+        WBC_GATE_CACHE["gate"] = _wbc_gate_from_text(
+            model, ref_model, tokenizer, ref_tokenizer, prefix_text, device, wbc_config
+        )
+        WBC_GATE_CACHE["step"] = step
+    gate_wbc = float(WBC_GATE_CACHE["gate"])
+    gate_wbc_t = torch.sigmoid(
+        torch.tensor(wgg * gate_wbc, device=device, dtype=topk_log_probs.dtype)
+    )
+
+    gate = torch.clamp(gate_inf * gate_wbc_t, max=torch.tensor(1.0, device=device))
+
+    shared_vocab = ref_tokenizer is tokenizer or getattr(ref_tokenizer, "vocab_size", -1) == getattr(
+        tokenizer, "vocab_size", -2
+    )
+
+    if shared_vocab and ref_model is not None:
+        outputs_r = ref_model(input_ids=input_ids, attention_mask=attention_mask)
+        lr_full = F.log_softmax(outputs_r.logits[:, -1, :] / temperature, dim=-1)
+        diff = lr_full[0, topk_ids[0]] - topk_log_probs[0]
+        adjusted = topk_log_probs[0] + lambda_contrast * gate * diff
+    else:
+        risks = []
+        for j in range(top_k):
+            tok_id = topk_ids[0, j].item()
+            tok_text = tokenizer.decode([tok_id], skip_special_tokens=False)
+            risk = prefix_infilling_score(
+                model,
+                tokenizer,
+                prefix_text + tok_text,
+                window=infilling_window,
+                m=infilling_m,
+                k=infilling_k,
+            )
+            risks.append(_safe_float(risk, default=prefix_risk))
+        rt = torch.tensor(risks, device=device, dtype=topk_log_probs.dtype)
+        rt = torch.nan_to_num(rt, nan=prefix_risk, posinf=prefix_risk, neginf=0.0)
+        g = _minmax01_1d(rt)
+        adjusted = topk_log_probs[0] - (
+            lambda_infilling * gate * g * float(infilling_penalty_sign)
+        )
+
+    adjusted_probs = _safe_probs_from_log_probs(adjusted)
+    sampled_index = torch.multinomial(adjusted_probs, num_samples=1).item()
+    return topk_ids[0, sampled_index].item()
+
 
 @torch.no_grad()
 def risk_aware_next_token_fast(
@@ -207,11 +342,14 @@ def risk_aware_next_token_fast(
     top_k=DEFAULT_DECODE_TOP_K,
     lambda_penalty=0.3,
     temperature=1.0,
-    window=24,
-    m=1,
+    window=64,
+    m=5,
     k=0.1,
     risk_every=1,
     gate_gamma=DEFAULT_GATE_GAMMA,
+    use_candidate_infilling: bool = True,
+    legacy_logprob_danger: bool = False,
+    infilling_penalty_sign: float = 1.0,
 ):
     outputs = model(input_ids=input_ids, attention_mask=attention_mask)
     logits = outputs.logits[:, -1, :]
@@ -238,13 +376,32 @@ def risk_aware_next_token_fast(
         )
     )
 
-    # Higher base log-prob -> higher danger in [0, 1] (most likely next token penalized most).
-    lp = topk_log_probs[0]
-    token_danger = _minmax01_1d(lp)
+    if legacy_logprob_danger or not use_candidate_infilling:
+        lp = topk_log_probs[0]
+        token_danger = _minmax01_1d(lp)
+        adjusted_log_probs = lp - (
+            lambda_penalty * gate * token_danger * float(infilling_penalty_sign)
+        )
+    else:
+        risks = []
+        for j in range(top_k):
+            tok_id = topk_ids[0, j].item()
+            tok_text = tokenizer.decode([tok_id], skip_special_tokens=False)
+            candidate_text = prefix_text + tok_text
 
-    adjusted_log_probs = lp - lambda_penalty * gate * token_danger
+            risk = prefix_infilling_score(
+                model, tokenizer, candidate_text, window=window, m=m, k=k
+            )
+            risks.append(_safe_float(risk, default=prefix_risk))
+
+        risks_t = torch.tensor(risks, device=input_ids.device, dtype=topk_log_probs.dtype)
+        risks_t = torch.nan_to_num(risks_t, nan=prefix_risk, posinf=prefix_risk, neginf=0.0)
+        g = _minmax01_1d(risks_t)
+        adjusted_log_probs = topk_log_probs[0] - (
+            lambda_penalty * gate * g * float(infilling_penalty_sign)
+        )
+
     adjusted_probs = _safe_probs_from_log_probs(adjusted_log_probs)
-
     sampled_index = torch.multinomial(adjusted_probs, num_samples=1).item()
     return topk_ids[0, sampled_index].item()
 
@@ -258,12 +415,26 @@ def generate_risk_aware(
     top_k=DEFAULT_DECODE_TOP_K,
     lambda_penalty=0.3,
     temperature=1.0,
-    mode="fast",   # "fast" or "slow"
+    mode="fast",
     gate_gamma=DEFAULT_GATE_GAMMA,
     risk_every=1,
+    reference_model=None,
+    reference_tokenizer=None,
+    wbc_lambda=0.5,
+    wbc_infilling_lambda=0.3,
+    wbc_gate_gamma=None,
+    wbc_gate_every=4,
+    wbc_config=None,
+    fast_use_candidate_infilling=True,
+    fast_legacy_logprob=False,
+    infilling_penalty_sign=1.0,
+    fast_infilling_window=64,
+    fast_infilling_m=5,
+    fast_infilling_k=0.1,
 ):
-    global RISK_CACHE
+    global RISK_CACHE, WBC_GATE_CACHE
     RISK_CACHE = {"step": -1, "risk": 0.0}
+    WBC_GATE_CACHE = {"step": -1, "gate": 0.0}
 
     device = next(model.parameters()).device
 
@@ -274,7 +445,7 @@ def generate_risk_aware(
     ).input_ids.to(device)
     attention_mask = torch.ones_like(input_ids, device=device)
 
-    for _ in range(max_new_tokens):
+    for step_idx in range(max_new_tokens):
         if mode == "slow":
             next_id = risk_aware_next_token_slow(
                 model,
@@ -285,6 +456,7 @@ def generate_risk_aware(
                 lambda_penalty=lambda_penalty,
                 temperature=temperature,
                 gate_gamma=gate_gamma,
+                infilling_penalty_sign=infilling_penalty_sign,
             )
         elif mode == "fast":
             next_id = risk_aware_next_token_fast(
@@ -295,11 +467,42 @@ def generate_risk_aware(
                 top_k=top_k,
                 lambda_penalty=lambda_penalty,
                 temperature=temperature,
+                window=fast_infilling_window,
+                m=fast_infilling_m,
+                k=fast_infilling_k,
                 risk_every=risk_every,
                 gate_gamma=gate_gamma,
+                use_candidate_infilling=fast_use_candidate_infilling,
+                legacy_logprob_danger=fast_legacy_logprob,
+                infilling_penalty_sign=infilling_penalty_sign,
+            )
+        elif mode == "wbc":
+            if reference_model is None:
+                raise ValueError("mode='wbc' requires reference_model")
+            rtok = reference_tokenizer if reference_tokenizer is not None else tokenizer
+            next_id = wbc_aware_next_token(
+                model,
+                reference_model,
+                tokenizer,
+                rtok,
+                input_ids,
+                attention_mask,
+                top_k=top_k,
+                temperature=temperature,
+                lambda_contrast=wbc_lambda,
+                lambda_infilling=wbc_infilling_lambda,
+                gate_gamma=gate_gamma,
+                wbc_gate_gamma=wbc_gate_gamma,
+                wbc_gate_every=wbc_gate_every,
+                step=step_idx,
+                wbc_config=wbc_config,
+                infilling_window=fast_infilling_window,
+                m=fast_infilling_m,
+                k=fast_infilling_k,
+                infilling_penalty_sign=infilling_penalty_sign,
             )
         else:
-            raise ValueError("mode must be 'fast' or 'slow'")
+            raise ValueError("mode must be 'fast', 'slow', or 'wbc'")
 
         next_tensor = torch.tensor([[next_id]], dtype=torch.long, device=device)
         input_ids = torch.cat([input_ids, next_tensor], dim=1)

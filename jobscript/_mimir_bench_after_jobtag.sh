@@ -1,6 +1,8 @@
 # MIMIR benchmark: HF caches, pip overlay, smoke tests, run Python benchmark.
 # Expects JOB_TAG and logs/${JOB_TAG} already set. Optional: MIMIR_BENCH_SINGLE_MODEL
 # adds --models <key> for array shards (one model per task).
+# Optional env → CLI (see run_mimir_decoding_benchmark_array*.slurm headers): MIMIR_FAST_LEGACY_LOGPROB,
+# MIMIR_INFILLING_PENALTY_SIGN, MIMIR_FAST_INFILLING_*, MIMIR_WBC_REFERENCE_MODEL, MIMIR_WBC_*, etc.
 
 if [[ -z "${HF_TOKEN:-}" ]]; then
   echo "HF_TOKEN is not set. Export it before sbatch, or use:" >&2
@@ -43,6 +45,35 @@ if [[ "${SKIP_SLOW:-0}" == "1" ]]; then
 fi
 if [[ -n "${MIMIR_BENCH_SINGLE_MODEL:-}" ]]; then
   EXTRA+=(--models "${MIMIR_BENCH_SINGLE_MODEL}")
+fi
+
+# Optional: memorization_detection/run_mimir_decoding_benchmark.py flags (see also BENCH_ARGS).
+if [[ "${MIMIR_FAST_LEGACY_LOGPROB:-0}" == "1" ]]; then
+  EXTRA+=(--fast-legacy-logprob)
+fi
+if [[ -n "${MIMIR_INFILLING_PENALTY_SIGN:-}" ]]; then
+  EXTRA+=(--infilling-penalty-sign "${MIMIR_INFILLING_PENALTY_SIGN}")
+fi
+if [[ -n "${MIMIR_FAST_INFILLING_WINDOW:-}" ]]; then
+  EXTRA+=(--fast-infilling-window "${MIMIR_FAST_INFILLING_WINDOW}")
+fi
+if [[ -n "${MIMIR_FAST_INFILLING_M:-}" ]]; then
+  EXTRA+=(--fast-infilling-m "${MIMIR_FAST_INFILLING_M}")
+fi
+if [[ -n "${MIMIR_FAST_INFILLING_K:-}" ]]; then
+  EXTRA+=(--fast-infilling-k "${MIMIR_FAST_INFILLING_K}")
+fi
+# WBC loads a second HF model (high VRAM); e.g. Pythia 2.8B + EleutherAI/pythia-70m with MIMIR_WBC_SHARE_TARGET_TOKENIZER=1
+if [[ -n "${MIMIR_WBC_REFERENCE_MODEL:-}" ]]; then
+  EXTRA+=(--wbc-reference-model "${MIMIR_WBC_REFERENCE_MODEL}")
+  [[ -n "${MIMIR_WBC_LAMBDA:-}" ]] && EXTRA+=(--wbc-lambda "${MIMIR_WBC_LAMBDA}")
+  [[ -n "${MIMIR_WBC_INFILLING_LAMBDA:-}" ]] && EXTRA+=(--wbc-infilling-lambda "${MIMIR_WBC_INFILLING_LAMBDA}")
+  [[ -n "${MIMIR_WBC_GATE_GAMMA:-}" ]] && EXTRA+=(--wbc-gate-gamma "${MIMIR_WBC_GATE_GAMMA}")
+  [[ -n "${MIMIR_WBC_GATE_EVERY:-}" ]] && EXTRA+=(--wbc-gate-every "${MIMIR_WBC_GATE_EVERY}")
+  [[ -n "${MIMIR_MAX_NEW_TOKENS_WBC:-}" ]] && EXTRA+=(--max-new-tokens-wbc "${MIMIR_MAX_NEW_TOKENS_WBC}")
+  if [[ "${MIMIR_WBC_SHARE_TARGET_TOKENIZER:-0}" == "1" ]]; then
+    EXTRA+=(--wbc-share-target-tokenizer)
+  fi
 fi
 
 echo "PROJECT_ROOT=${PROJECT_ROOT}"

@@ -2,6 +2,11 @@
 MIMIR member-prefix decoding benchmark: baseline vs fast vs slow risk-aware decoding.
 
 Runs three open LMs by default (GPT-Neo 2.7B, Pythia 2.8B, Pythia 1.4B), one at a time.
+Fast mode now defaults to **per-candidate infilling** (same signal as slow); pass
+`--fast-legacy-logprob` for the old min-max log-prob heuristic. Optional **WBC** decoding
+(Window-Based Comparison, arXiv:2601.02751) via `--wbc-reference-model <HF id>` adds a fourth
+mode when a smaller reference LM is available (heavy: two models on GPU).
+
 Slow mode is many infilling calls per token; shorten with --slow-max-new-tokens, raise --top-k
 cost, lower --risk-every, or --skip-slow. Slurm scripts default MIMIR_BENCH_PROFILE=6h (baseline+fast,
 fewer examples). For the full slow benchmark, set MIMIR_BENCH_PROFILE=full and a longer --time, or use
@@ -26,10 +31,15 @@ import os
 import random
 import sys
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import torch
 from datasets import load_dataset
+
+try:
+    from wbc_attack.core import WBCConfig
+except ImportError:
+    WBCConfig = None  # type: ignore[misc, assignment]
 
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if _REPO_ROOT not in sys.path:
@@ -93,6 +103,18 @@ def run_benchmark_for_model(
     gate_gamma: float,
     risk_every: int,
     verbose: bool,
+    wbc_reference_hf: Optional[str] = None,
+    wbc_lambda: float = 0.5,
+    wbc_infilling_lambda: float = 0.3,
+    wbc_gate_gamma: Optional[float] = None,
+    wbc_gate_every: int = 4,
+    max_new_tokens_wbc: int = 64,
+    wbc_share_target_tokenizer: bool = False,
+    fast_legacy_logprob: bool = False,
+    infilling_penalty_sign: float = 1.0,
+    fast_infilling_window: int = 64,
+    fast_infilling_m: int = 5,
+    fast_infilling_k: float = 0.1,
 ) -> Dict[str, Any]:
     hf_name = MODEL_CONFIGS[model_key]
     print(f"\n{'=' * 60}\nLoading {model_key} ({hf_name})\n{'=' * 60}")
@@ -100,7 +122,25 @@ def run_benchmark_for_model(
     model, tokenizer = load_lm(hf_name)
     print(f"Load time: {time.time() - t0:.1f}s")
 
-    modes = ["baseline", "fast"] + ([] if skip_slow else ["slow"])
+    ref_model = None
+    ref_tokenizer = None
+    if wbc_reference_hf:
+        print(f"Loading WBC reference: {wbc_reference_hf}")
+        t1 = time.time()
+        ref_model, ref_tokenizer = load_lm(wbc_reference_hf)
+        print(f"Reference load time: {time.time() - t1:.1f}s")
+        if wbc_share_target_tokenizer:
+            ref_tokenizer = tokenizer
+            print("WBC: using target tokenizer for reference logits (same-vocab contrastive path).")
+
+    modes = ["baseline", "fast"]
+    if not skip_slow:
+        modes.append("slow")
+    if wbc_reference_hf:
+        modes.append("wbc")
+
+    wbc_cfg = WBCConfig() if WBCConfig is not None else None
+
     per_example: List[Dict[str, Any]] = []
     overlap_lists = {m: [] for m in modes}
     lcp_lists = {m: [] for m in modes}
@@ -122,9 +162,8 @@ def run_benchmark_for_model(
             continue
 
         row: Dict[str, Any] = {"example_index": i}
-        for mode in modes:
-            # Reproducible per (example, mode); paths differ so not paired across modes.
-            set_seed(seed + 10_000 * i + 100 * modes.index(mode))
+        for mi, mode in enumerate(modes):
+            set_seed(seed + 10_000 * i + 100 * mi)
 
             if mode == "baseline":
                 gen = generate_baseline(
@@ -146,8 +185,14 @@ def run_benchmark_for_model(
                     mode="fast",
                     gate_gamma=gate_gamma,
                     risk_every=risk_every,
+                    fast_use_candidate_infilling=not fast_legacy_logprob,
+                    fast_legacy_logprob=fast_legacy_logprob,
+                    infilling_penalty_sign=infilling_penalty_sign,
+                    fast_infilling_window=fast_infilling_window,
+                    fast_infilling_m=fast_infilling_m,
+                    fast_infilling_k=fast_infilling_k,
                 )
-            else:
+            elif mode == "slow":
                 gen = generate_risk_aware(
                     prefix,
                     model,
@@ -158,7 +203,35 @@ def run_benchmark_for_model(
                     temperature=temperature,
                     mode="slow",
                     gate_gamma=gate_gamma,
+                    infilling_penalty_sign=infilling_penalty_sign,
                 )
+            elif mode == "wbc":
+                assert ref_model is not None and ref_tokenizer is not None
+                gen = generate_risk_aware(
+                    prefix,
+                    model,
+                    tokenizer,
+                    max_new_tokens=max_new_tokens_wbc,
+                    top_k=top_k,
+                    lambda_penalty=lambda_fast,
+                    temperature=temperature,
+                    mode="wbc",
+                    gate_gamma=gate_gamma,
+                    risk_every=risk_every,
+                    reference_model=ref_model,
+                    reference_tokenizer=ref_tokenizer,
+                    wbc_lambda=wbc_lambda,
+                    wbc_infilling_lambda=wbc_infilling_lambda,
+                    wbc_gate_gamma=wbc_gate_gamma,
+                    wbc_gate_every=wbc_gate_every,
+                    wbc_config=wbc_cfg,
+                    infilling_penalty_sign=infilling_penalty_sign,
+                    fast_infilling_window=fast_infilling_window,
+                    fast_infilling_m=fast_infilling_m,
+                    fast_infilling_k=fast_infilling_k,
+                )
+            else:
+                raise RuntimeError(f"unknown mode {mode}")
 
             ov, lcp = token_overlap_with_suffix(
                 gen,
@@ -200,6 +273,8 @@ def run_benchmark_for_model(
             f"  {m:8s}  mean_overlap={s['mean_overlap']:.6f}  mean_lcp={s['mean_lcp']:.4f}"
         )
 
+    if ref_model is not None:
+        unload_model(ref_model)
     unload_model(model)
 
     return {
@@ -282,6 +357,51 @@ def parse_args() -> argparse.Namespace:
         default=1,
         help="Recompute prefix infilling every N tokens in fast mode (1 = every step)",
     )
+    p.add_argument(
+        "--fast-legacy-logprob",
+        action="store_true",
+        help="Fast mode: use legacy min-max log-prob danger (old behavior). Default uses per-candidate infilling.",
+    )
+    p.add_argument(
+        "--infilling-penalty-sign",
+        type=float,
+        default=1.0,
+        help="Multiply infilling penalty term; set -1 if empirical calibration is inverted.",
+    )
+    p.add_argument("--fast-infilling-window", type=int, default=64)
+    p.add_argument("--fast-infilling-m", type=int, default=5)
+    p.add_argument("--fast-infilling-k", type=float, default=0.1)
+    p.add_argument(
+        "--wbc-reference-model",
+        type=str,
+        default="",
+        help="HF model id for WBC-gated decoding (arXiv:2601.02751). Empty disables wbc mode.",
+    )
+    p.add_argument("--wbc-lambda", type=float, default=0.5, help="Contrastive strength when vocab is shared")
+    p.add_argument(
+        "--wbc-infilling-lambda",
+        type=float,
+        default=0.3,
+        help="Infilling fallback strength in wbc mode when target/ref tokenizers differ",
+    )
+    p.add_argument(
+        "--wbc-gate-gamma",
+        type=float,
+        default=None,
+        help="Sigmoid scale for WBC gate (default: same as --gate-gamma)",
+    )
+    p.add_argument("--wbc-gate-every", type=int, default=4, help="Recompute WBC on full prefix every N decode steps")
+    p.add_argument(
+        "--max-new-tokens-wbc",
+        type=int,
+        default=64,
+        help="max_new_tokens for wbc decoding mode",
+    )
+    p.add_argument(
+        "--wbc-share-target-tokenizer",
+        action="store_true",
+        help="Use target tokenizer for reference logits (only when reference shares the same vocab; e.g. Pythia family)",
+    )
     p.add_argument("--temperature", type=float, default=1.0)
     p.add_argument("--output", type=str, default="", help="Write full JSON results here")
     p.add_argument("-v", "--verbose", action="store_true")
@@ -290,6 +410,12 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+
+    if args.wbc_reference_model and WBCConfig is None:
+        raise SystemExit(
+            "WBC decoding requires wbc_attack and mia_eval.losses (import failed). "
+            "Install project deps and run from repo root."
+        )
 
     for k in args.models:
         if k not in MODEL_CONFIGS:
@@ -328,6 +454,18 @@ def main() -> None:
             "gate_gamma": args.gate_gamma,
             "risk_every": args.risk_every,
             "temperature": args.temperature,
+            "fast_legacy_logprob": args.fast_legacy_logprob,
+            "infilling_penalty_sign": args.infilling_penalty_sign,
+            "fast_infilling_window": args.fast_infilling_window,
+            "fast_infilling_m": args.fast_infilling_m,
+            "fast_infilling_k": args.fast_infilling_k,
+            "wbc_reference_model": args.wbc_reference_model or None,
+            "wbc_lambda": args.wbc_lambda,
+            "wbc_infilling_lambda": args.wbc_infilling_lambda,
+            "wbc_gate_gamma": args.wbc_gate_gamma,
+            "wbc_gate_every": args.wbc_gate_every,
+            "max_new_tokens_wbc": args.max_new_tokens_wbc,
+            "wbc_share_target_tokenizer": args.wbc_share_target_tokenizer,
         },
         "results_by_model": {},
     }
@@ -353,6 +491,18 @@ def main() -> None:
             gate_gamma=args.gate_gamma,
             risk_every=args.risk_every,
             verbose=args.verbose,
+            wbc_reference_hf=args.wbc_reference_model or None,
+            wbc_lambda=args.wbc_lambda,
+            wbc_infilling_lambda=args.wbc_infilling_lambda,
+            wbc_gate_gamma=args.wbc_gate_gamma,
+            wbc_gate_every=args.wbc_gate_every,
+            max_new_tokens_wbc=args.max_new_tokens_wbc,
+            wbc_share_target_tokenizer=args.wbc_share_target_tokenizer,
+            fast_legacy_logprob=args.fast_legacy_logprob,
+            infilling_penalty_sign=args.infilling_penalty_sign,
+            fast_infilling_window=args.fast_infilling_window,
+            fast_infilling_m=args.fast_infilling_m,
+            fast_infilling_k=args.fast_infilling_k,
         )
 
     out["wall_time_s"] = round(time.time() - t_all, 2)

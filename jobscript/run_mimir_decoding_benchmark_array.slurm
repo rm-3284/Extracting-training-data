@@ -24,6 +24,15 @@
 # Optional overrides (same as monolithic job): CONDA_ENV, N_EXAMPLES, BENCH_OUTPUT,
 # SKIP_SLOW, BENCH_ARGS, HF_HOME, ...
 #
+# Decoding / benchmark flags (passed via jobscript/_mimir_bench_after_jobtag.sh → EXTRA):
+#   MIMIR_FAST_LEGACY_LOGPROB=1     --fast-legacy-logprob (old fast heuristic)
+#   MIMIR_INFILLING_PENALTY_SIGN    e.g. -1 to flip infilling penalty direction
+#   MIMIR_FAST_INFILLING_WINDOW/M/K  infilling hyperparameters for fast/wbc paths
+#   MIMIR_WBC_REFERENCE_MODEL       HF id to enable WBC mode (loads 2nd model; raise --mem if OOM)
+#   MIMIR_WBC_LAMBDA, MIMIR_WBC_INFILLING_LAMBDA, MIMIR_WBC_GATE_GAMMA, MIMIR_WBC_GATE_EVERY
+#   MIMIR_MAX_NEW_TOKENS_WBC        --max-new-tokens-wbc
+#   MIMIR_WBC_SHARE_TARGET_TOKENIZER=1  --wbc-share-target-tokenizer (same-vocab Pythia family)
+#
 # Per-task output default (override with BENCH_OUTPUT):
 #   logs/mimir_shard_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}.json
 #
