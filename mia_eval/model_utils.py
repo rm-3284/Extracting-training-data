@@ -252,26 +252,27 @@ def _crystal_get_head_mask(
 
 
 def _ensure_crystal_head_mask_methods(model: Any) -> None:
-    """``CrystalCoderModel`` calls ``get_head_mask`` / ``_convert_head_mask_to_5d`` from older Transformers."""
+    """Patch every ``CrystalCoderModel`` class under this root.
 
-    inner: Any = None
-    if type(model).__name__ == "CrystalCoderForCausalLM" and getattr(model, "transformer", None) is not None:
-        inner = model.transformer
-    elif type(model).__name__ == "CrystalCoderModel":
-        inner = model
-    if inner is None:
-        return
-
-    cls = type(inner)
-    if getattr(cls, "_mia_eval_crystal_head_mask_patched", False):
-        return
-    if hasattr(cls, "get_head_mask") and callable(getattr(cls, "get_head_mask")):
+    Hub revisions differ: the LM wrapper may not be named ``CrystalCoderForCausalLM``,
+    so do not rely on ``model.transformer`` — walk ``modules()`` and patch by class name.
+    """
+    seen: Set[type] = set()
+    for mod in model.modules():
+        cls = type(mod)
+        if cls.__name__ != "CrystalCoderModel":
+            continue
+        if cls in seen:
+            continue
+        seen.add(cls)
+        if getattr(cls, "_mia_eval_crystal_head_mask_patched", False):
+            continue
+        if hasattr(cls, "get_head_mask") and callable(getattr(cls, "get_head_mask")):
+            cls._mia_eval_crystal_head_mask_patched = True
+            continue
+        cls._convert_head_mask_to_5d = _crystal_convert_head_mask_to_5d
+        cls.get_head_mask = _crystal_get_head_mask
         cls._mia_eval_crystal_head_mask_patched = True
-        return
-
-    cls._convert_head_mask_to_5d = _crystal_convert_head_mask_to_5d
-    cls.get_head_mask = _crystal_get_head_mask
-    cls._mia_eval_crystal_head_mask_patched = True
 
 
 def _from_pretrained_causal_lm(model_name: str, kwargs: Dict[str, Any]) -> Any:
