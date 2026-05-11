@@ -10,8 +10,8 @@
 #   3 models × 4 example shards = 12 parallel tasks (must match MIMIR_MODEL_KEYS × MIMIR_EXAMPLE_SHARDS).
 #   WBC loads a second HF model per task (default small refs below); raise --mem if OOM.
 #SBATCH --array=0-11
-#SBATCH --output=logs/mimir_slow_%A_%a.out
-#SBATCH --error=logs/mimir_slow_%A_%a.err
+#SBATCH --output=logs/%A/%a.out
+#SBATCH --error=logs/%A/%a.err
 #SBATCH --chdir=/n/fs/vision-mix/rm4411/Extracting-training-data
 #
 # Runs baseline + fast + **slow** + **wbc** by splitting each model across several tasks (--example-offset),
