@@ -2,8 +2,11 @@
 MIMIR member-prefix decoding benchmark: baseline vs fast vs slow risk-aware decoding.
 
 Runs three open LMs by default (GPT-Neo 2.7B, Pythia 2.8B, Pythia 1.4B), one at a time.
-Slow mode is many infilling calls per token; use --slow-max-new-tokens (default 24) to keep
-runtime manageable, or --skip-slow.
+Slow mode is many infilling calls per token; shorten with --slow-max-new-tokens, raise --top-k
+cost, lower --risk-every, or --skip-slow. Slurm scripts default MIMIR_BENCH_PROFILE=6h (baseline+fast,
+fewer examples). For the full slow benchmark, set MIMIR_BENCH_PROFILE=full and a longer --time, or use
+jobscript/run_mimir_decoding_benchmark_array_slow_6h.slurm (12 parallel 6h tasks: slow + example shards)
+and merge shards.
 
 Usage (from repo root):
   export HF_TOKEN=...
@@ -74,6 +77,7 @@ def run_benchmark_for_model(
     model_key: str,
     rows,
     *,
+    example_offset: int,
     n_examples: int,
     seed: int,
     prefix_tokens: int,
@@ -101,7 +105,10 @@ def run_benchmark_for_model(
     overlap_lists = {m: [] for m in modes}
     lcp_lists = {m: [] for m in modes}
 
-    for i in range(n_examples):
+    for j in range(n_examples):
+        i = example_offset + j
+        if i >= len(rows):
+            break
         text = rows[i]["member"]
         prefix, true_suffix = split_by_tokens(
             text,
@@ -111,7 +118,7 @@ def run_benchmark_for_model(
         )
         if prefix is None:
             if verbose:
-                print(f"skip example {i}: too short for prefix+suffix")
+                print(f"skip example row {i}: too short for prefix+suffix")
             continue
 
         row: Dict[str, Any] = {"example_index": i}
@@ -175,8 +182,8 @@ def run_benchmark_for_model(
                     for m in modes
                 )
             )
-        elif (i + 1) % 10 == 0 or i == 0:
-            print(f"  progress: {i + 1}/{n_examples} examples with valid prefix/suffix")
+        elif (j + 1) % 10 == 0 or j == 0:
+            print(f"  progress: {j + 1}/{n_examples} rows (dataset index {i})")
 
     summary = {}
     for m in modes:
@@ -211,7 +218,18 @@ def parse_args() -> argparse.Namespace:
         default=list(DEFAULT_MODEL_KEYS),
         help=f"Hugging Face model keys from MODEL_CONFIGS (default: {list(DEFAULT_MODEL_KEYS)})",
     )
-    p.add_argument("--n-examples", type=int, default=50, help="First N rows from MIMIR split")
+    p.add_argument(
+        "--n-examples",
+        type=int,
+        default=50,
+        help="Number of MIMIR rows to score, starting at --example-offset",
+    )
+    p.add_argument(
+        "--example-offset",
+        type=int,
+        default=0,
+        help="First row index in the MIMIR split (shard across jobs)",
+    )
     p.add_argument("--seed", type=int, default=0, help="Base RNG seed")
     p.add_argument(
         "--mimir-config",
@@ -294,6 +312,7 @@ def main() -> None:
         "config": {
             "models": args.models,
             "n_examples_requested": args.n_examples,
+            "example_offset": args.example_offset,
             "seed": args.seed,
             "mimir_config": args.mimir_config,
             "mimir_split": args.mimir_split,
@@ -318,6 +337,7 @@ def main() -> None:
         out["results_by_model"][model_key] = run_benchmark_for_model(
             model_key,
             rows,
+            example_offset=args.example_offset,
             n_examples=args.n_examples,
             seed=args.seed,
             prefix_tokens=args.prefix_tokens,
