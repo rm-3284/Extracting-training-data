@@ -2,7 +2,8 @@
 # Expects JOB_TAG and logs/${JOB_TAG} already set. Optional: MIMIR_BENCH_SINGLE_MODEL
 # adds --models <key> for array shards (one model per task).
 # Optional env → CLI (see run_mimir_decoding_benchmark_array*.slurm headers): MIMIR_FAST_LEGACY_LOGPROB,
-# MIMIR_INFILLING_PENALTY_SIGN, MIMIR_FAST_INFILLING_*, MIMIR_WBC_REFERENCE_MODEL, MIMIR_WBC_*, etc.
+# MIMIR_INFILLING_PENALTY_SIGN, MIMIR_FAST_INFILLING_*, MIMIR_RISK_SCORE_MODE, MIMIR_RISK_EXPLORE_EPS,
+# MIMIR_FAST_AUX_LOGPROB_LAMBDA, MIMIR_SLOW_AUX_LOGPROB_LAMBDA, MIMIR_WBC_REFERENCE_MODEL, MIMIR_WBC_*, etc.
 
 if [[ -z "${HF_TOKEN:-}" ]]; then
   echo "HF_TOKEN is not set. Export it before sbatch, or use:" >&2
@@ -62,6 +63,18 @@ if [[ -n "${MIMIR_FAST_INFILLING_M:-}" ]]; then
 fi
 if [[ -n "${MIMIR_FAST_INFILLING_K:-}" ]]; then
   EXTRA+=(--fast-infilling-k "${MIMIR_FAST_INFILLING_K}")
+fi
+if [[ -n "${MIMIR_RISK_SCORE_MODE:-}" ]]; then
+  EXTRA+=(--risk-score-mode "${MIMIR_RISK_SCORE_MODE}")
+fi
+if [[ -n "${MIMIR_RISK_EXPLORE_EPS:-}" ]]; then
+  EXTRA+=(--risk-explore-eps "${MIMIR_RISK_EXPLORE_EPS}")
+fi
+if [[ -n "${MIMIR_FAST_AUX_LOGPROB_LAMBDA:-}" ]]; then
+  EXTRA+=(--fast-aux-logprob-lambda "${MIMIR_FAST_AUX_LOGPROB_LAMBDA}")
+fi
+if [[ -n "${MIMIR_SLOW_AUX_LOGPROB_LAMBDA:-}" ]]; then
+  EXTRA+=(--slow-aux-logprob-lambda "${MIMIR_SLOW_AUX_LOGPROB_LAMBDA}")
 fi
 # WBC loads a second HF model (high VRAM); e.g. Pythia 2.8B + EleutherAI/pythia-70m with MIMIR_WBC_SHARE_TARGET_TOKENIZER=1
 if [[ -n "${MIMIR_WBC_REFERENCE_MODEL:-}" ]]; then

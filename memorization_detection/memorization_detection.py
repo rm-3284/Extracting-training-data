@@ -148,6 +148,50 @@ def _safe_probs_from_log_probs(log_probs: torch.Tensor) -> torch.Tensor:
     return probs / total
 
 
+def _infilling_penalty_vector(
+    risks: torch.Tensor,
+    prefix_risk: float,
+    mode: str,
+) -> torch.Tensor:
+    """
+    Map per-candidate infilling scores to penalties in [0, 1] for each top-k slot.
+
+    - ``delta`` (default): penalize only candidates that *increase* infilling vs the current
+      prefix (marginal member-like signal). Often better for steering away from memorized
+      one-step spikes than raw min-max of absolute scores.
+    - ``absolute``: legacy min-max normalization of raw candidate scores.
+    - ``zscore``: min-max of z-scored candidate scores (relative spread within the pool).
+    """
+    m = (mode or "delta").lower().strip()
+    pr = float(prefix_risk)
+    r = torch.nan_to_num(risks, nan=pr, posinf=pr, neginf=0.0)
+    if m == "absolute":
+        return _minmax01_1d(r)
+    if m == "zscore":
+        mu = r.mean()
+        sig = r.std()
+        if float(sig.item()) < 1e-8:
+            return torch.zeros_like(r)
+        z = (r - mu) / (sig + 1e-8)
+        return _minmax01_1d(z)
+    # delta
+    d = r - pr
+    return _minmax01_1d(torch.clamp(d, min=0.0))
+
+
+def _mix_uniform_over_simplex(probs: torch.Tensor, eps: float) -> torch.Tensor:
+    """Blend distribution with uniform over support to retain exploration (eps in [0,1])."""
+    if eps <= 0:
+        return probs
+    k = probs.numel()
+    flat = torch.full_like(probs, 1.0 / float(k))
+    out = (1.0 - eps) * probs + eps * flat
+    tot = out.sum()
+    if not torch.isfinite(tot) or tot <= 0:
+        return flat
+    return out / tot
+
+
 # Version 1: slow — candidate infilling scores with absolute [0,1] weights (not z-scored),
 # scaled by a sigmoid gate from prefix-only infilling (intervention only when prefix looks risky).
 # Cost: top_k + 1 infilling calls per generated token.
@@ -165,6 +209,9 @@ def risk_aware_next_token_slow(
     k=0.1,
     gate_gamma=DEFAULT_GATE_GAMMA,
     infilling_penalty_sign: float = 1.0,
+    risk_score_mode: str = "delta",
+    risk_explore_eps: float = 0.07,
+    aux_logprob_lambda: float = 0.0,
 ):
     outputs = model(input_ids=input_ids, attention_mask=attention_mask)
     logits = outputs.logits[:, -1, :]
@@ -199,12 +246,18 @@ def risk_aware_next_token_slow(
 
     risks = torch.tensor(risks, device=input_ids.device, dtype=topk_log_probs.dtype)
     risks = torch.nan_to_num(risks, nan=prefix_risk, posinf=prefix_risk, neginf=0.0)
-    g = _minmax01_1d(risks)
+    g = _infilling_penalty_vector(risks, prefix_risk, risk_score_mode)
+
+    lp = topk_log_probs[0]
+    g_aux = _minmax01_1d(lp) if aux_logprob_lambda > 0 else torch.zeros_like(g)
+    g_combined = torch.clamp(g + float(aux_logprob_lambda) * g_aux, max=1.0)
 
     adjusted_log_probs = topk_log_probs[0] - (
-        lambda_penalty * gate * g * float(infilling_penalty_sign)
+        lambda_penalty * gate * g_combined * float(infilling_penalty_sign)
     )
     adjusted_probs = _safe_probs_from_log_probs(adjusted_log_probs)
+    eps_eff = float(risk_explore_eps) * float(gate.item())
+    adjusted_probs = _mix_uniform_over_simplex(adjusted_probs, eps_eff)
 
     sampled_index = torch.multinomial(adjusted_probs, num_samples=1).item()
     return topk_ids[0, sampled_index].item()
@@ -260,6 +313,8 @@ def wbc_aware_next_token(
     infilling_m=5,
     infilling_k=0.1,
     infilling_penalty_sign: float = 1.0,
+    risk_score_mode: str = "delta",
+    risk_explore_eps: float = 0.07,
 ):
     """
     Window-based comparison (WBC) gated decoding: high WBC score => more member-like under
@@ -323,12 +378,14 @@ def wbc_aware_next_token(
             risks.append(_safe_float(risk, default=prefix_risk))
         rt = torch.tensor(risks, device=device, dtype=topk_log_probs.dtype)
         rt = torch.nan_to_num(rt, nan=prefix_risk, posinf=prefix_risk, neginf=0.0)
-        g = _minmax01_1d(rt)
+        g = _infilling_penalty_vector(rt, prefix_risk, risk_score_mode)
         adjusted = topk_log_probs[0] - (
             lambda_infilling * gate * g * float(infilling_penalty_sign)
         )
 
     adjusted_probs = _safe_probs_from_log_probs(adjusted)
+    eps_eff = float(risk_explore_eps) * float(gate.item())
+    adjusted_probs = _mix_uniform_over_simplex(adjusted_probs, eps_eff)
     sampled_index = torch.multinomial(adjusted_probs, num_samples=1).item()
     return topk_ids[0, sampled_index].item()
 
@@ -350,6 +407,9 @@ def risk_aware_next_token_fast(
     use_candidate_infilling: bool = True,
     legacy_logprob_danger: bool = False,
     infilling_penalty_sign: float = 1.0,
+    risk_score_mode: str = "delta",
+    risk_explore_eps: float = 0.07,
+    aux_logprob_lambda: float = 0.05,
 ):
     outputs = model(input_ids=input_ids, attention_mask=attention_mask)
     logits = outputs.logits[:, -1, :]
@@ -382,6 +442,9 @@ def risk_aware_next_token_fast(
         adjusted_log_probs = lp - (
             lambda_penalty * gate * token_danger * float(infilling_penalty_sign)
         )
+        adjusted_probs = _safe_probs_from_log_probs(adjusted_log_probs)
+        eps_eff = float(risk_explore_eps) * float(gate.item())
+        adjusted_probs = _mix_uniform_over_simplex(adjusted_probs, eps_eff)
     else:
         risks = []
         for j in range(top_k):
@@ -396,12 +459,17 @@ def risk_aware_next_token_fast(
 
         risks_t = torch.tensor(risks, device=input_ids.device, dtype=topk_log_probs.dtype)
         risks_t = torch.nan_to_num(risks_t, nan=prefix_risk, posinf=prefix_risk, neginf=0.0)
-        g = _minmax01_1d(risks_t)
+        g = _infilling_penalty_vector(risks_t, prefix_risk, risk_score_mode)
+        lp = topk_log_probs[0]
+        g_aux = _minmax01_1d(lp) if aux_logprob_lambda > 0 else torch.zeros_like(g)
+        g_combined = torch.clamp(g + float(aux_logprob_lambda) * g_aux, max=1.0)
         adjusted_log_probs = topk_log_probs[0] - (
-            lambda_penalty * gate * g * float(infilling_penalty_sign)
+            lambda_penalty * gate * g_combined * float(infilling_penalty_sign)
         )
+        adjusted_probs = _safe_probs_from_log_probs(adjusted_log_probs)
+        eps_eff = float(risk_explore_eps) * float(gate.item())
+        adjusted_probs = _mix_uniform_over_simplex(adjusted_probs, eps_eff)
 
-    adjusted_probs = _safe_probs_from_log_probs(adjusted_log_probs)
     sampled_index = torch.multinomial(adjusted_probs, num_samples=1).item()
     return topk_ids[0, sampled_index].item()
 
@@ -431,6 +499,10 @@ def generate_risk_aware(
     fast_infilling_window=64,
     fast_infilling_m=5,
     fast_infilling_k=0.1,
+    risk_score_mode: str = "delta",
+    risk_explore_eps: float = 0.07,
+    fast_aux_logprob_lambda: float = 0.05,
+    slow_aux_logprob_lambda: float = 0.0,
 ):
     global RISK_CACHE, WBC_GATE_CACHE
     RISK_CACHE = {"step": -1, "risk": 0.0}
@@ -457,6 +529,9 @@ def generate_risk_aware(
                 temperature=temperature,
                 gate_gamma=gate_gamma,
                 infilling_penalty_sign=infilling_penalty_sign,
+                risk_score_mode=risk_score_mode,
+                risk_explore_eps=risk_explore_eps,
+                aux_logprob_lambda=slow_aux_logprob_lambda,
             )
         elif mode == "fast":
             next_id = risk_aware_next_token_fast(
@@ -475,6 +550,9 @@ def generate_risk_aware(
                 use_candidate_infilling=fast_use_candidate_infilling,
                 legacy_logprob_danger=fast_legacy_logprob,
                 infilling_penalty_sign=infilling_penalty_sign,
+                risk_score_mode=risk_score_mode,
+                risk_explore_eps=risk_explore_eps,
+                aux_logprob_lambda=fast_aux_logprob_lambda,
             )
         elif mode == "wbc":
             if reference_model is None:
@@ -500,6 +578,8 @@ def generate_risk_aware(
                 m=fast_infilling_m,
                 k=fast_infilling_k,
                 infilling_penalty_sign=infilling_penalty_sign,
+                risk_score_mode=risk_score_mode,
+                risk_explore_eps=risk_explore_eps,
             )
         else:
             raise ValueError("mode must be 'fast', 'slow', or 'wbc'")

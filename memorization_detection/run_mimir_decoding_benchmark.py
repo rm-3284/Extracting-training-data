@@ -115,6 +115,10 @@ def run_benchmark_for_model(
     fast_infilling_window: int = 64,
     fast_infilling_m: int = 5,
     fast_infilling_k: float = 0.1,
+    risk_score_mode: str = "delta",
+    risk_explore_eps: float = 0.07,
+    fast_aux_logprob_lambda: float = 0.05,
+    slow_aux_logprob_lambda: float = 0.0,
 ) -> Dict[str, Any]:
     hf_name = MODEL_CONFIGS[model_key]
     print(f"\n{'=' * 60}\nLoading {model_key} ({hf_name})\n{'=' * 60}")
@@ -191,6 +195,10 @@ def run_benchmark_for_model(
                     fast_infilling_window=fast_infilling_window,
                     fast_infilling_m=fast_infilling_m,
                     fast_infilling_k=fast_infilling_k,
+                    risk_score_mode=risk_score_mode,
+                    risk_explore_eps=risk_explore_eps,
+                    fast_aux_logprob_lambda=fast_aux_logprob_lambda,
+                    slow_aux_logprob_lambda=slow_aux_logprob_lambda,
                 )
             elif mode == "slow":
                 gen = generate_risk_aware(
@@ -204,6 +212,10 @@ def run_benchmark_for_model(
                     mode="slow",
                     gate_gamma=gate_gamma,
                     infilling_penalty_sign=infilling_penalty_sign,
+                    risk_score_mode=risk_score_mode,
+                    risk_explore_eps=risk_explore_eps,
+                    fast_aux_logprob_lambda=fast_aux_logprob_lambda,
+                    slow_aux_logprob_lambda=slow_aux_logprob_lambda,
                 )
             elif mode == "wbc":
                 assert ref_model is not None and ref_tokenizer is not None
@@ -229,6 +241,10 @@ def run_benchmark_for_model(
                     fast_infilling_window=fast_infilling_window,
                     fast_infilling_m=fast_infilling_m,
                     fast_infilling_k=fast_infilling_k,
+                    risk_score_mode=risk_score_mode,
+                    risk_explore_eps=risk_explore_eps,
+                    fast_aux_logprob_lambda=fast_aux_logprob_lambda,
+                    slow_aux_logprob_lambda=slow_aux_logprob_lambda,
                 )
             else:
                 raise RuntimeError(f"unknown mode {mode}")
@@ -372,6 +388,30 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--fast-infilling-m", type=int, default=5)
     p.add_argument("--fast-infilling-k", type=float, default=0.1)
     p.add_argument(
+        "--risk-score-mode",
+        choices=("delta", "absolute", "zscore"),
+        default="delta",
+        help="How to map infilling scores to [0,1] penalties within the top-k pool (delta = marginal vs prefix)",
+    )
+    p.add_argument(
+        "--risk-explore-eps",
+        type=float,
+        default=0.07,
+        help="Uniform-mix strength on adjusted probs (scaled by infilling gate in slow/fast/WBC infilling paths)",
+    )
+    p.add_argument(
+        "--fast-aux-logprob-lambda",
+        type=float,
+        default=0.05,
+        help="Weight of min-max log-prob auxiliary term in fast (and WBC) risk shaping; 0 disables",
+    )
+    p.add_argument(
+        "--slow-aux-logprob-lambda",
+        type=float,
+        default=0.0,
+        help="Same auxiliary term for slow mode (default off)",
+    )
+    p.add_argument(
         "--wbc-reference-model",
         type=str,
         default="",
@@ -459,6 +499,10 @@ def main() -> None:
             "fast_infilling_window": args.fast_infilling_window,
             "fast_infilling_m": args.fast_infilling_m,
             "fast_infilling_k": args.fast_infilling_k,
+            "risk_score_mode": args.risk_score_mode,
+            "risk_explore_eps": args.risk_explore_eps,
+            "fast_aux_logprob_lambda": args.fast_aux_logprob_lambda,
+            "slow_aux_logprob_lambda": args.slow_aux_logprob_lambda,
             "wbc_reference_model": args.wbc_reference_model or None,
             "wbc_lambda": args.wbc_lambda,
             "wbc_infilling_lambda": args.wbc_infilling_lambda,
@@ -503,6 +547,10 @@ def main() -> None:
             fast_infilling_window=args.fast_infilling_window,
             fast_infilling_m=args.fast_infilling_m,
             fast_infilling_k=args.fast_infilling_k,
+            risk_score_mode=args.risk_score_mode,
+            risk_explore_eps=args.risk_explore_eps,
+            fast_aux_logprob_lambda=args.fast_aux_logprob_lambda,
+            slow_aux_logprob_lambda=args.slow_aux_logprob_lambda,
         )
 
     out["wall_time_s"] = round(time.time() - t_all, 2)
