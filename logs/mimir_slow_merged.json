@@ -21,7 +21,19 @@
     "top_k": 10,
     "gate_gamma": 5.0,
     "risk_every": 4,
-    "temperature": 1.0
+    "temperature": 1.0,
+    "fast_legacy_logprob": false,
+    "infilling_penalty_sign": 1.0,
+    "fast_infilling_window": 64,
+    "fast_infilling_m": 5,
+    "fast_infilling_k": 0.1,
+    "wbc_reference_model": null,
+    "wbc_lambda": 0.5,
+    "wbc_infilling_lambda": 0.3,
+    "wbc_gate_gamma": null,
+    "wbc_gate_every": 4,
+    "max_new_tokens_wbc": 64,
+    "wbc_share_target_tokenizer": false
   },
   "results_by_model": {
     "gpt_neo_2p7": {
@@ -34,8 +46,8 @@
           "n_scored": 24
         },
         "fast": {
-          "mean_overlap": 0.038421792328042326,
-          "mean_lcp": 1.5416666666666667,
+          "mean_overlap": 0.024088541666666668,
+          "mean_lcp": 0.75,
           "n_scored": 24
         },
         "slow": {
@@ -49,7 +61,7 @@
           "example_index": 0,
           "baseline_overlap": 0.0,
           "baseline_lcp": 0,
-          "fast_overlap": 0.015873015873015872,
+          "fast_overlap": 0.0,
           "fast_lcp": 0,
           "slow_overlap": 0.03125,
           "slow_lcp": 0
@@ -58,8 +70,8 @@
           "example_index": 1,
           "baseline_overlap": 0.078125,
           "baseline_lcp": 1,
-          "fast_overlap": 0.3125,
-          "fast_lcp": 20,
+          "fast_overlap": 0.046875,
+          "fast_lcp": 1,
           "slow_overlap": 0.34375,
           "slow_lcp": 6
         },
@@ -76,7 +88,7 @@
           "example_index": 3,
           "baseline_overlap": 0.0,
           "baseline_lcp": 0,
-          "fast_overlap": 0.046875,
+          "fast_overlap": 0.03125,
           "fast_lcp": 1,
           "slow_overlap": 0.09375,
           "slow_lcp": 3
@@ -103,7 +115,7 @@
           "example_index": 6,
           "baseline_overlap": 0.015625,
           "baseline_lcp": 0,
-          "fast_overlap": 0.0,
+          "fast_overlap": 0.03125,
           "fast_lcp": 0,
           "slow_overlap": 0.0,
           "slow_lcp": 0
@@ -220,7 +232,7 @@
           "example_index": 19,
           "baseline_overlap": 0.0,
           "baseline_lcp": 0,
-          "fast_overlap": 0.109375,
+          "fast_overlap": 0.0625,
           "fast_lcp": 2,
           "slow_overlap": 0.03125,
           "slow_lcp": 1
@@ -247,7 +259,7 @@
           "example_index": 22,
           "baseline_overlap": 0.03125,
           "baseline_lcp": 0,
-          "fast_overlap": 0.03125,
+          "fast_overlap": 0.0,
           "fast_lcp": 0,
           "slow_overlap": 0.0,
           "slow_lcp": 0
@@ -273,8 +285,8 @@
           "n_scored": 24
         },
         "fast": {
-          "mean_overlap": 0.025390625,
-          "mean_lcp": 0.4583333333333333,
+          "mean_overlap": 0.02734375,
+          "mean_lcp": 0.4166666666666667,
           "n_scored": 24
         },
         "slow": {
@@ -306,7 +318,7 @@
           "example_index": 2,
           "baseline_overlap": 0.03125,
           "baseline_lcp": 1,
-          "fast_overlap": 0.0,
+          "fast_overlap": 0.015625,
           "fast_lcp": 0,
           "slow_overlap": 0.03125,
           "slow_lcp": 1
@@ -316,7 +328,7 @@
           "baseline_overlap": 0.078125,
           "baseline_lcp": 0,
           "fast_overlap": 0.046875,
-          "fast_lcp": 1,
+          "fast_lcp": 0,
           "slow_overlap": 0.0,
           "slow_lcp": 0
         },
@@ -342,7 +354,7 @@
           "example_index": 6,
           "baseline_overlap": 0.015625,
           "baseline_lcp": 0,
-          "fast_overlap": 0.0,
+          "fast_overlap": 0.03125,
           "fast_lcp": 0,
           "slow_overlap": 0.03125,
           "slow_lcp": 0
@@ -512,8 +524,8 @@
           "n_scored": 24
         },
         "fast": {
-          "mean_overlap": 0.02734375,
-          "mean_lcp": 0.9166666666666666,
+          "mean_overlap": 0.023447833994708994,
+          "mean_lcp": 0.6666666666666666,
           "n_scored": 24
         },
         "slow": {
@@ -536,8 +548,8 @@
           "example_index": 1,
           "baseline_overlap": 0.171875,
           "baseline_lcp": 6,
-          "fast_overlap": 0.171875,
-          "fast_lcp": 10,
+          "fast_overlap": 0.09375,
+          "fast_lcp": 4,
           "slow_overlap": 0.1875,
           "slow_lcp": 3
         },
@@ -545,7 +557,7 @@
           "example_index": 2,
           "baseline_overlap": 0.015625,
           "baseline_lcp": 1,
-          "fast_overlap": 0.015625,
+          "fast_overlap": 0.015873015873015872,
           "fast_lcp": 1,
           "slow_overlap": 0.0,
           "slow_lcp": 0
@@ -572,7 +584,7 @@
           "example_index": 5,
           "baseline_overlap": 0.015625,
           "baseline_lcp": 0,
-          "fast_overlap": 0.015625,
+          "fast_overlap": 0.0,
           "fast_lcp": 0,
           "slow_overlap": 0.03125,
           "slow_lcp": 0
@@ -742,37 +754,37 @@
       ]
     }
   },
-  "wall_time_s": 34348.86,
+  "wall_time_s": 94796.81,
   "merge_meta": {
     "shard_paths": [
-      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992022_0.json",
-      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992022_1.json",
-      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992022_10.json",
-      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992022_11.json",
-      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992022_2.json",
-      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992022_3.json",
-      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992022_4.json",
-      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992022_5.json",
-      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992022_6.json",
-      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992022_7.json",
-      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992022_8.json",
-      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992022_9.json"
+      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992440_0.json",
+      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992440_1.json",
+      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992440_10.json",
+      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992440_11.json",
+      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992440_2.json",
+      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992440_3.json",
+      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992440_4.json",
+      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992440_5.json",
+      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992440_6.json",
+      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992440_7.json",
+      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992440_8.json",
+      "/n/fs/vision-mix/rm4411/Extracting-training-data/logs/mimir_slow_shard_2992440_9.json"
     ],
     "shard_wall_times_s": [
-      3418.83,
-      2883.21,
-      3065.42,
-      2291.81,
-      2226.61,
-      3431.53,
-      2878.61,
-      2245.43,
-      3369.16,
-      2848.79,
-      2158.84,
-      3530.62
+      9485.72,
+      8199.11,
+      7891.36,
+      6548.95,
+      6059.48,
+      9485.05,
+      7963.4,
+      6150.58,
+      9374.75,
+      8053.38,
+      6160.33,
+      9424.7
     ],
-    "merged_wall_time_s": 34348.86,
+    "merged_wall_time_s": 94796.81,
     "merged_example_span": 24
   }
 }
