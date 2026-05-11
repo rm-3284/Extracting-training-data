@@ -1,0 +1,89 @@
+{
+  "model_key": "dclm_7b_instruct",
+  "target_model": "mlfoundations/dclm-7b-it",
+  "reference_model": "TRI-ML/DCLM-1B",
+  "input": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract/dclm_7b_instruct/samples_labeled.jsonl",
+  "n_samples": 1477,
+  "max_length_tokens": 256,
+  "window": 50,
+  "has_labels": true,
+  "has_mia_gt_primary_for_proxy": false,
+  "proxy_thresholds_json": null,
+  "metrics": {
+    "Perplexity": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 1.0,
+        "@100": 1.0
+      }
+    },
+    "Small": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 1.0,
+        "@100": 1.0
+      }
+    },
+    "zlib": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 1.0,
+        "@100": 1.0
+      }
+    },
+    "Lowercase": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 1.0,
+        "@100": 1.0
+      }
+    },
+    "Window": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 1.0,
+        "@100": 1.0
+      }
+    }
+  }
+}

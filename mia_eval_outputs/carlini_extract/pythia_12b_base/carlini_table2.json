@@ -1,0 +1,89 @@
+{
+  "model_key": "pythia_12b_base",
+  "target_model": "EleutherAI/pythia-12b",
+  "reference_model": "EleutherAI/pythia-160m",
+  "input": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract/pythia_12b_base/samples_labeled.jsonl",
+  "n_samples": 1500,
+  "max_length_tokens": 256,
+  "window": 50,
+  "has_labels": true,
+  "has_mia_gt_primary_for_proxy": false,
+  "proxy_thresholds_json": null,
+  "metrics": {
+    "Perplexity": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": 14.42336844277382,
+        "sum": 21635.05266416073,
+        "std": 86.40732202163233,
+        "min": 1.0513828992843628,
+        "max": 2087.703369140625
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 0.96,
+        "@100": 0.97
+      }
+    },
+    "Small": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": 0.7059604373657853,
+        "sum": 1058.940656048678,
+        "std": 0.09409787636760442,
+        "min": 0.08990355627877626,
+        "max": 1.1169266109819955
+      },
+      "precision_at_k": {
+        "@10": 0.8,
+        "@50": 0.94,
+        "@100": 0.96
+      }
+    },
+    "zlib": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": 0.3362931625474032,
+        "sum": 504.4397438211048,
+        "std": 0.17497636460601257,
+        "min": 0.007785143479366124,
+        "max": 1.984543971964671
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 0.96,
+        "@100": 0.97
+      }
+    },
+    "Lowercase": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": 0.8848554024337885,
+        "sum": 1327.2831036506827,
+        "std": 0.12666717022059126,
+        "min": 0.05471155326449854,
+        "max": 1.0758962272297208
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 0.98,
+        "@100": 0.97
+      }
+    },
+    "Window": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": Infinity,
+        "sum": Infinity,
+        "std": NaN,
+        "min": 1.0341849327087402,
+        "max": Infinity
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 1.0,
+        "@100": 0.98
+      }
+    }
+  }
+}

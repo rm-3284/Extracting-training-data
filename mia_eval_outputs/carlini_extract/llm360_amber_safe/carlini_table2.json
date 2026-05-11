@@ -1,0 +1,89 @@
+{
+  "model_key": "llm360_amber_safe",
+  "target_model": "LLM360/AmberSafe",
+  "reference_model": "LLM360/Crystal",
+  "input": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract/llm360_amber_safe/samples_labeled.jsonl",
+  "n_samples": 1499,
+  "max_length_tokens": 256,
+  "window": 50,
+  "has_labels": true,
+  "has_mia_gt_primary_for_proxy": false,
+  "proxy_thresholds_json": null,
+  "metrics": {
+    "Perplexity": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": 38.65576361512406,
+        "sum": 57944.98965907097,
+        "std": 595.2462933116892,
+        "min": 1.0524060726165771,
+        "max": 19132.1796875
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 0.98,
+        "@100": 0.99
+      }
+    },
+    "Small": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": 0.17056896506832608,
+        "sum": 255.6828786374208,
+        "std": 0.10298606324155073,
+        "min": 0.0,
+        "max": 0.9843370972963842
+      },
+      "precision_at_k": {
+        "@10": 0.9,
+        "@50": 0.92,
+        "@100": 0.92
+      }
+    },
+    "zlib": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": 0.23831629748921448,
+        "sum": 357.23612993633253,
+        "std": 0.21640501872713075,
+        "min": 0.009640617273440106,
+        "max": 3.555928405622632
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 0.98,
+        "@100": 0.99
+      }
+    },
+    "Lowercase": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": 0.8469971788295163,
+        "sum": 1269.6487710654449,
+        "std": 0.13335688237509105,
+        "min": 0.16776036990305312,
+        "max": 1.2770462261083175
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 0.98,
+        "@100": 0.98
+      }
+    },
+    "Window": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": Infinity,
+        "sum": Infinity,
+        "std": NaN,
+        "min": 1.0189021825790405,
+        "max": Infinity
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 0.98,
+        "@100": 0.99
+      }
+    }
+  }
+}

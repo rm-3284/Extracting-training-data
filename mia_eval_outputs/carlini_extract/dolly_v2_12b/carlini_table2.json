@@ -1,0 +1,89 @@
+{
+  "model_key": "dolly_v2_12b",
+  "target_model": "ethzanalytics/dolly-v2-12b-sharded",
+  "reference_model": "EleutherAI/pythia-160m",
+  "input": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract/dolly_v2_12b/samples_labeled.jsonl",
+  "n_samples": 1500,
+  "max_length_tokens": 256,
+  "window": 50,
+  "has_labels": true,
+  "has_mia_gt_primary_for_proxy": false,
+  "proxy_thresholds_json": null,
+  "metrics": {
+    "Perplexity": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 1.0,
+        "@100": 0.99
+      }
+    },
+    "Small": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 0.9,
+        "@50": 0.98,
+        "@100": 0.99
+      }
+    },
+    "zlib": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 1.0,
+        "@100": 1.0
+      }
+    },
+    "Lowercase": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 1.0,
+        "@100": 0.99
+      }
+    },
+    "Window": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 1.0,
+        "@100": 0.99
+      }
+    }
+  }
+}

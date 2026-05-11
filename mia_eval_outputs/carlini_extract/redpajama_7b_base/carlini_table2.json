@@ -1,0 +1,89 @@
+{
+  "model_key": "redpajama_7b_base",
+  "target_model": "togethercomputer/RedPajama-INCITE-7B-Base",
+  "reference_model": "togethercomputer/RedPajama-INCITE-Base-3B-v1",
+  "input": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract/redpajama_7b_base/samples_labeled.jsonl",
+  "n_samples": 1500,
+  "max_length_tokens": 256,
+  "window": 50,
+  "has_labels": true,
+  "has_mia_gt_primary_for_proxy": false,
+  "proxy_thresholds_json": null,
+  "metrics": {
+    "Perplexity": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": 7.703729903697967,
+        "sum": 11555.594855546951,
+        "std": 2.5012283652144855,
+        "min": 1.1580559015274048,
+        "max": 17.842830657958984
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 1.0,
+        "@100": 1.0
+      }
+    },
+    "Small": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": 0.8893815028971342,
+        "sum": 1334.0722543457014,
+        "std": 0.06277131594019429,
+        "min": 0.3047245683309823,
+        "max": 1.0463027472558106
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 1.0,
+        "@100": 1.0
+      }
+    },
+    "zlib": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": 0.31183461488813635,
+        "sum": 467.7519223322045,
+        "std": 0.05534484288421501,
+        "min": 0.029058781203179552,
+        "max": 0.4546121346048742
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 1.0,
+        "@100": 1.0
+      }
+    },
+    "Lowercase": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": 0.9094619946951216,
+        "sum": 1364.1929920426824,
+        "std": 0.08576732456867647,
+        "min": 0.212589812580572,
+        "max": 1.1521600663735858
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 1.0,
+        "@100": 1.0
+      }
+    },
+    "Window": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": 7.515818645954132,
+        "sum": 11273.727968931198,
+        "std": 2.9348054072123873,
+        "min": 1.0634891986846924,
+        "max": 28.466487884521484
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 1.0,
+        "@100": 1.0
+      }
+    }
+  }
+}

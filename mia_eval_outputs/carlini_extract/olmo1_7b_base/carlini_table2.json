@@ -1,0 +1,89 @@
+{
+  "model_key": "olmo1_7b_base",
+  "target_model": "allenai/OLMo-7B",
+  "reference_model": "allenai/OLMo-1B-0724-hf",
+  "input": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract/olmo1_7b_base/samples_labeled.jsonl",
+  "n_samples": 1500,
+  "max_length_tokens": 256,
+  "window": 50,
+  "has_labels": true,
+  "has_mia_gt_primary_for_proxy": false,
+  "proxy_thresholds_json": null,
+  "metrics": {
+    "Perplexity": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": 13.430916666666667,
+        "sum": 20146.375,
+        "std": 37.73224735141505,
+        "min": 1.109375,
+        "max": 1000.0
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 0.98,
+        "@100": 0.96
+      }
+    },
+    "Small": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": 0.8717098432494733,
+        "sum": 1307.56476487421,
+        "std": 0.1142827807727429,
+        "min": 0.06770992192737578,
+        "max": 1.157986709856532
+      },
+      "precision_at_k": {
+        "@10": 0.9,
+        "@50": 0.92,
+        "@100": 0.86
+      }
+    },
+    "zlib": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": 0.3736938748391223,
+        "sum": 560.5408122586834,
+        "std": 0.17108568679668726,
+        "min": 0.017473705433615594,
+        "max": 1.9034189315536956
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 0.98,
+        "@100": 0.98
+      }
+    },
+    "Lowercase": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": 0.9289861879539153,
+        "sum": 1393.479281930873,
+        "std": 0.10455294508794413,
+        "min": 0.21379017598918815,
+        "max": 1.2492709770967458
+      },
+      "precision_at_k": {
+        "@10": 0.9,
+        "@50": 0.86,
+        "@100": 0.82
+      }
+    },
+    "Window": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": Infinity,
+        "sum": Infinity,
+        "std": NaN,
+        "min": 1.0703125,
+        "max": Infinity
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 0.98,
+        "@100": 0.97
+      }
+    }
+  }
+}

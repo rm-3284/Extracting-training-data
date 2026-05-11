@@ -1,0 +1,89 @@
+{
+  "model_key": "olmo2_7b_instruct",
+  "target_model": "allenai/OLMo-2-1124-7B-Instruct",
+  "reference_model": "allenai/OLMo-2-0425-1B",
+  "input": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract/olmo2_7b_instruct/samples_labeled.jsonl",
+  "n_samples": 1500,
+  "max_length_tokens": 256,
+  "window": 50,
+  "has_labels": true,
+  "has_mia_gt_primary_for_proxy": false,
+  "proxy_thresholds_json": null,
+  "metrics": {
+    "Perplexity": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 0.9,
+        "@50": 0.98,
+        "@100": 0.98
+      }
+    },
+    "Small": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 0.4,
+        "@50": 0.44,
+        "@100": 0.69
+      }
+    },
+    "zlib": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 1.0,
+        "@100": 1.0
+      }
+    },
+    "Lowercase": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 0.5,
+        "@50": 0.72,
+        "@100": 0.78
+      }
+    },
+    "Window": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 1.0,
+        "@100": 0.99
+      }
+    }
+  }
+}

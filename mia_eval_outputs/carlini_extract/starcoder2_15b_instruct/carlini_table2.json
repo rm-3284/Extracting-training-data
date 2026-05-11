@@ -1,0 +1,89 @@
+{
+  "model_key": "starcoder2_15b_instruct",
+  "target_model": "bigcode/starcoder2-15b-instruct-v0.1",
+  "reference_model": "bigcode/starcoder2-3b",
+  "input": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract/starcoder2_15b_instruct/samples_labeled.jsonl",
+  "n_samples": 1500,
+  "max_length_tokens": 256,
+  "window": 50,
+  "has_labels": true,
+  "has_mia_gt_primary_for_proxy": false,
+  "proxy_thresholds_json": null,
+  "metrics": {
+    "Perplexity": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 1.0,
+        "@100": 1.0
+      }
+    },
+    "Small": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 0.96,
+        "@100": 0.97
+      }
+    },
+    "zlib": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 1.0,
+        "@100": 1.0
+      }
+    },
+    "Lowercase": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 0.96,
+        "@100": 0.94
+      }
+    },
+    "Window": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 1.0,
+        "@100": 1.0
+      }
+    }
+  }
+}
