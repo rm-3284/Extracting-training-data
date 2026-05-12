@@ -3,7 +3,8 @@
 Compute precision@k **separately for each generation method** without merging samples.
 
 Supports both:
-1. **Carlini extraction methods** (top_k, top_k_internet, temperature_decay) — serve as undefended baselines
+1. **Carlini extraction** (top_k, top_k_internet, temperature_decay, …) and **memorization_detection**
+   sources (``memorization_baseline``, ``memorization_risk_fast``, …) when enabled in YAML.
 2. **Decoding defense methods** (fast, slow, wbc) — defense-based generations to compare against Carlini
 
 For each model and each Carlini metric (Perplexity, Small, zlib, etc.), compute P@k
@@ -75,7 +76,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from mia_eval.carlini_sample_sources import GENERATION_SOURCES_ORDER
 from mia_eval.evaluation_common import precision_at_k as _precision_at_k
+
+# Known ``source`` tags from ``mia_eval.generation`` (Carlini + memorization_detection block).
+CARLINI_SOURCES = list(GENERATION_SOURCES_ORDER)
+DECODING_SOURCES = ["fast", "slow", "wbc"]
 
 # Carlini metrics: (display_name, json_field, lower_is_better)
 CARLINI_METRICS: List[tuple[str, str, bool]] = [
@@ -85,10 +91,6 @@ CARLINI_METRICS: List[tuple[str, str, bool]] = [
     ("Lowercase", "lowercase_log_ratio", True),
     ("Window", "perplexity_window_min", True),
 ]
-
-# Expected generation sources (auto-detected per dataset)
-CARLINI_SOURCES = ["top_k", "top_k_internet", "temperature_decay"]
-DECODING_SOURCES = ["fast", "slow", "wbc"]
 
 
 def _detect_sources(samples: List[Dict[str, Any]]) -> tuple[List[str], str]:

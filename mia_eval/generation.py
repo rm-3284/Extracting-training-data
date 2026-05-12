@@ -1,7 +1,9 @@
-"""Carlini-style generation: top-k, temperature decay (paper §5.1.1), optional nucleus."""
+"""Carlini-style generation: top-k, temperature decay (paper §5.1.1), optional nucleus,
+and optional ``memorization_detection`` decoders (baseline / risk-aware / WBC)."""
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import sys
@@ -15,6 +17,7 @@ except ImportError:
 
 import torch
 
+from .carlini_sample_sources import MEMORIZATION_DETECTION_SOURCES
 from .ground_truth import stream_texts
 from .model_utils import load_causal_lm, pick_device, torch_dtype_from_str
 
@@ -387,6 +390,179 @@ def _run_strategy_internet(
     return rows[:n]
 
 
+def _import_memorization_detection():
+    """Load ``memorization_detection/memorization_detection.py`` without package name clash."""
+    root = Path(__file__).resolve().parents[1]
+    path = root / "memorization_detection" / "memorization_detection.py"
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"memorization_detection enabled but file missing: {path} "
+            "(clone must include memorization_detection/)."
+        )
+    spec = importlib.util.spec_from_file_location("mia_eval_memorization_detection_impl", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load spec for {path}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _eos_like_prompt_and_max_new(tokenizer, seq_len: int) -> Tuple[str, int]:
+    """Match Carlini empty-prompt style: EOS (or pad) only, then fill up to ``seq_len`` tokens total."""
+    p = tokenizer.eos_token or tokenizer.pad_token or ""
+    enc = tokenizer(p, return_tensors="pt", add_special_tokens=False)
+    plen = int(enc["input_ids"].shape[1])
+    # ``generate_*`` APIs extend by max_new_tokens; total length ≈ plen + max_new.
+    return p, max(8, int(seq_len) - plen)
+
+
+def _append_memorization_detection_records(
+    records: List[Dict[str, Any]],
+    *,
+    md_cfg: Dict[str, Any],
+    model: Any,
+    tokenizer: Any,
+    device: torch.device,
+    dtype: Optional[torch.dtype],
+    model_bundle: Dict[str, Any],
+    seq_len: int,
+) -> None:
+    """Append samples from ``memorization_detection`` decoders (baseline / risk-aware / WBC)."""
+    strategies = list(md_cfg.get("strategies") or ())
+    if not strategies:
+        strategies = [
+            "memorization_baseline",
+            "memorization_risk_fast",
+            "memorization_risk_slow",
+        ]
+    unknown = [s for s in strategies if s not in MEMORIZATION_DETECTION_SOURCES]
+    if unknown:
+        raise ValueError(
+            f"memorization_detection.strategies unknown keys {unknown!r}; "
+            f"allowed: {list(MEMORIZATION_DETECTION_SOURCES)}"
+        )
+
+    n_per = int(md_cfg.get("num_samples_per_strategy", 0))
+    if n_per <= 0:
+        raise ValueError("memorization_detection.num_samples_per_strategy must be positive when enabled")
+
+    mod = _import_memorization_detection()
+    prompt, max_new = _eos_like_prompt_and_max_new(tokenizer, seq_len)
+    decode_top_k = int(md_cfg.get("decode_top_k", 20))
+    temperature = float(md_cfg.get("temperature", 1.0))
+    gate_gamma = float(md_cfg.get("gate_gamma", 5.0))
+    risk_every = int(md_cfg.get("risk_every", 1))
+    lam_fast = float(md_cfg.get("lambda_penalty_fast", 0.3))
+    lam_slow = float(md_cfg.get("lambda_penalty_slow", 0.5))
+    wbc_lambda = float(md_cfg.get("wbc_lambda", 0.5))
+    wbc_infilling_lambda = float(md_cfg.get("wbc_infilling_lambda", 0.3))
+    wbc_gate_gamma = md_cfg.get("wbc_gate_gamma")
+    wbc_gate_every = int(md_cfg.get("wbc_gate_every", 4))
+
+    ref_model = None
+    ref_tokenizer = None
+    if "memorization_wbc" in strategies:
+        ref_id = md_cfg.get("reference_model") or model_bundle.get("reference_model")
+        if not ref_id:
+            _carlini_log(
+                "[generate] memorization_detection: memorization_wbc listed but no "
+                "``reference_model`` in YAML (set generation.memorization_detection.reference_model "
+                "or model_bundle.reference_model); skipping memorization_wbc.",
+                verbose=False,
+            )
+            strategies = [s for s in strategies if s != "memorization_wbc"]
+        else:
+            ref_tok = md_cfg.get("reference_tokenizer") or ref_id
+            _carlini_log(
+                f"[generate] memorization_detection: loading reference {ref_id!r} for WBC …",
+                verbose=False,
+            )
+            ref_model, ref_tokenizer = load_causal_lm(str(ref_id), str(ref_tok), device, dtype)
+
+    try:
+        for strat in strategies:
+            desc = f"generate:{strat}"
+            pbar = _carlini_pbar(n_per, desc=desc)
+            try:
+                for _ in range(n_per):
+                    if strat == "memorization_baseline":
+                        text = mod.generate_baseline(
+                            prompt,
+                            model,
+                            tokenizer,
+                            max_new_tokens=max_new,
+                            temperature=temperature,
+                        )
+                    elif strat == "memorization_risk_fast":
+                        text = mod.generate_risk_aware(
+                            prompt,
+                            model,
+                            tokenizer,
+                            max_new_tokens=max_new,
+                            top_k=decode_top_k,
+                            lambda_penalty=lam_fast,
+                            temperature=temperature,
+                            mode="fast",
+                            gate_gamma=gate_gamma,
+                            risk_every=risk_every,
+                            reference_model=None,
+                            reference_tokenizer=None,
+                        )
+                    elif strat == "memorization_risk_slow":
+                        text = mod.generate_risk_aware(
+                            prompt,
+                            model,
+                            tokenizer,
+                            max_new_tokens=max_new,
+                            top_k=decode_top_k,
+                            lambda_penalty=lam_slow,
+                            temperature=temperature,
+                            mode="slow",
+                            gate_gamma=gate_gamma,
+                            risk_every=risk_every,
+                            reference_model=None,
+                            reference_tokenizer=None,
+                        )
+                    elif strat == "memorization_wbc":
+                        assert ref_model is not None
+                        text = mod.generate_risk_aware(
+                            prompt,
+                            model,
+                            tokenizer,
+                            max_new_tokens=max_new,
+                            top_k=decode_top_k,
+                            temperature=temperature,
+                            mode="wbc",
+                            gate_gamma=gate_gamma,
+                            risk_every=risk_every,
+                            reference_model=ref_model,
+                            reference_tokenizer=ref_tokenizer,
+                            wbc_lambda=wbc_lambda,
+                            wbc_infilling_lambda=wbc_infilling_lambda,
+                            wbc_gate_gamma=wbc_gate_gamma,
+                            wbc_gate_every=wbc_gate_every,
+                        )
+                    else:
+                        raise RuntimeError(f"unhandled strategy {strat!r}")
+                    records.append({"text": text, "source": strat})
+                    if pbar is not None:
+                        pbar.update(1)
+            finally:
+                if pbar is not None:
+                    pbar.close()
+            _carlini_log(
+                f"[generate] {strat} done: {len([r for r in records if r.get('source')==strat])} rows",
+                verbose=False,
+            )
+    finally:
+        if ref_model is not None:
+            del ref_model
+        if ref_tokenizer is not None:
+            del ref_tokenizer
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
+
+
 def generate_diverse_samples(
     cfg: Dict[str, Any],
     model_bundle: Dict[str, Any],
@@ -596,6 +772,30 @@ def generate_diverse_samples(
                 f"[generate] nucleus_internet done: {len(records)} rows so far",
                 verbose=False,
             )
+
+    md = gcfg.get("memorization_detection") or {}
+    if isinstance(md, dict) and md.get("enabled"):
+        md_eff = dict(md)
+        if not md_eff.get("num_samples_per_strategy"):
+            md_eff["num_samples_per_strategy"] = n_per
+        _carlini_log(
+            "[generate] memorization_detection: generating extra samples (see YAML strategies) …",
+            verbose=False,
+        )
+        _append_memorization_detection_records(
+            records,
+            md_cfg=md_eff,
+            model=model,
+            tokenizer=tokenizer,
+            device=device,
+            dtype=dtype,
+            model_bundle=model_bundle,
+            seq_len=seq_len,
+        )
+        _carlini_log(
+            f"[generate] memorization_detection done: {len(records)} rows total",
+            verbose=False,
+        )
 
     gt = model_bundle.get("ground_truth") or {}
     n_train_ex = int(gcfg.get("add_training_excerpts_members", 0))

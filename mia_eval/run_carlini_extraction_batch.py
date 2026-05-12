@@ -231,10 +231,21 @@ def run() -> None:
                 lines_inet += n_inet
             if nuc_on and "nucleus" in inet_strats:
                 lines_inet += n_nuc_i
+        md = gcfg.get("memorization_detection") or {}
+        lines_mem = 0
+        if isinstance(md, dict) and md.get("enabled"):
+            n_md = int(md.get("num_samples_per_strategy") or nps)
+            strat = md.get("strategies") or [
+                "memorization_baseline",
+                "memorization_risk_fast",
+                "memorization_risk_slow",
+            ]
+            lines_mem = n_md * len(list(strat))
         print(f"Output root: {out_root}")
         print(
-            f"Generation: ~{lines_plain + lines_inet} lines/run "
-            f"(plain {lines_plain} + internet {lines_inet}; batch_size={gcfg.get('batch_size')})"
+            f"Generation: ~{lines_plain + lines_inet + lines_mem} lines/run "
+            f"(plain {lines_plain} + internet {lines_inet} + memorization_detection {lines_mem}; "
+            f"batch_size={gcfg.get('batch_size')})"
         )
         for spec in planned:
             print(
@@ -273,6 +284,8 @@ def run() -> None:
             "tokenizer": tok_id,
             "torch_dtype": dtype_str,
         }
+        if spec.get("reference_model"):
+            model_bundle["reference_model"] = spec["reference_model"]
 
         _set_seeds(seed0)
         out_dir.mkdir(parents=True, exist_ok=True)

@@ -50,6 +50,28 @@ generation:
     skip_initial_documents: 0
   add_training_excerpts_members: 0
   add_wikipedia_nonmembers: 0
+  # Optional: ``memorization_detection/memorization_detection.py`` decoders (sequential; slow is costly).
+  # Each listed strategy appends ``num_samples_per_strategy`` rows with ``source`` =
+  # memorization_baseline | memorization_risk_fast | memorization_risk_slow | memorization_wbc.
+  # For ``memorization_wbc``, set ``reference_model`` here and/or ``reference_model`` on a ``carlini_runs`` row.
+  memorization_detection:
+    enabled: false
+    # num_samples_per_strategy: 500   # default: same as ``num_samples_per_strategy`` above
+    # strategies:
+    #   - memorization_baseline
+    #   - memorization_risk_fast
+    #   - memorization_risk_slow
+    #   # - memorization_wbc
+    # reference_model: null   # HF id for WBC contrast model (e.g. smaller LM on same tokenizer)
+    decode_top_k: 20
+    temperature: 1.0
+    gate_gamma: 5.0
+    risk_every: 1
+    lambda_penalty_fast: 0.3
+    lambda_penalty_slow: 0.5
+    wbc_lambda: 0.5
+    wbc_infilling_lambda: 0.3
+    wbc_gate_every: 4
 
 # Each entry becomes output_dir/carlini_extract/<run_key>/samples.jsonl
 carlini_runs:

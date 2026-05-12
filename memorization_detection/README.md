@@ -168,6 +168,15 @@ This does **not** claim perfect memorization detection. The hypothesis is that M
 
 ---
 
+## Carlini extraction (``mia_eval``)
+
+To append these decoders into the same ``samples.jsonl`` used for Carlini Table‑2 runs, enable
+``generation.memorization_detection`` in ``mia_eval/config/carlini_open_models.yaml`` (see comments there).
+Row ``source`` values are ``memorization_baseline``, ``memorization_risk_fast``, ``memorization_risk_slow``, and
+optionally ``memorization_wbc`` (set ``reference_model`` in that YAML block, or add ``reference_model`` on a
+``carlini_runs`` entry so ``run_carlini_extraction_batch`` passes it into the bundle). Canonical names live in
+``mia_eval/carlini_sample_sources.py``.
+
 ## Relation to the rest of the repo
 
 Same broad theme as membership-inference work elsewhere in the project, but applied **while** generating text, not only to score finished outputs.

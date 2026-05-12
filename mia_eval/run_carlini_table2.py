@@ -13,7 +13,10 @@ then forms the same ratios as ``Extracting-Training-Data-from-Large-Langauge-Mod
 ``Small``, ``zlib``, ``Lowercase``, ``Window``, plus raw ``Perplexity``.
 
 If every input row has integer ``label`` (0/1), reports **precision@k** for each Carlini metric
-(as in the original script).
+(as in the original script). When rows include Carlini extraction ``source`` values
+(``top_k``, ``top_k_internet``, ``temperature_decay``), each metric also gets
+``precision_at_k_by_source``: the same P@k computed **within each source only** (no merging
+across decoding strategies). Use ``--no-precision-by-source`` to omit that block.
 
 If ``label`` is missing but every row has ``mia_gt_primary`` with ``infilling``, ``wbc``, and
 ``memtrace_p_member`` (e.g. ``samples_mia_gt.jsonl`` from ``all_mia_gt``), also reports
@@ -55,6 +58,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from mia_eval.carlini_sample_sources import GENERATION_SOURCES_ORDER
 from mia_eval.config_loader import active_model_bundle, load_merged_config, apply_dot_overrides
 from mia_eval.evaluation_common import jsonable as _jsonable, precision_at_k
 from mia_eval.model_utils import load_causal_lm, pick_device, torch_dtype_from_str
@@ -115,6 +119,49 @@ def _aggregate_over_samples(arr: np.ndarray) -> Dict[str, float]:
         "min": float(np.min(arr)),
         "max": float(np.max(arr)),
     }
+
+
+def _precision_at_k_by_generation_source(
+    arr: np.ndarray,
+    y: np.ndarray,
+    sources: List[str],
+    ks: List[int],
+    lower_better: bool,
+) -> Optional[Dict[str, Any]]:
+    """Precision@k **within** each JSONL ``source`` slice (Carlini + memorization_detection)."""
+    if y is None or len(sources) != len(arr):
+        return None
+    src_np = np.asarray([str(s) if s is not None else "" for s in sources], dtype=object)
+    if not np.any(src_np != ""):
+        return None
+    out: Dict[str, Any] = {}
+    for src in GENERATION_SOURCES_ORDER:
+        mask = src_np == src
+        if not np.any(mask):
+            continue
+        idx = np.where(mask)[0]
+        sub_a = np.asarray(arr[idx], dtype=np.float64)
+        sub_y = np.asarray(y[idx], dtype=np.float64)
+        finite = np.isfinite(sub_a)
+        if not np.any(finite):
+            out[src] = {"n_samples": int(len(idx)), "error": "no_finite_scores"}
+            continue
+        sub_a = sub_a[finite]
+        sub_y = sub_y[finite]
+        n = int(len(sub_a))
+        pos = int(np.sum(sub_y == 1))
+        pk_row: Dict[str, float] = {}
+        for k in ks:
+            pk_row[f"@{k}"] = float(
+                precision_at_k(sub_a, sub_y, k, lower_better=lower_better)
+            )
+        out[src] = {
+            "n_samples": n,
+            "n_positive": pos,
+            "n_negative": int(n - pos),
+            "precision_at_k": pk_row,
+        }
+    return out or None
 
 
 def _load_proxy_thresholds_json(path: Path) -> Dict[str, Tuple[float, bool]]:
@@ -313,6 +360,15 @@ def main() -> None:
         ),
     )
     ap.add_argument(
+        "--no-precision-by-source",
+        action="store_true",
+        help=(
+            "Omit ``precision_at_k_by_source`` (P@k within each JSONL ``source``: Carlini + "
+            "memorization_detection tags). Default: include when ``label`` is on all lines "
+            "and at least one known ``source`` appears."
+        ),
+    )
+    ap.add_argument(
         "--proxy-thresholds-json",
         type=str,
         default="",
@@ -440,6 +496,13 @@ def main() -> None:
         else None,
         "metrics": {},
     }
+    if y is not None and not args.no_precision_by_source:
+        results["precision_at_k_by_source_note"] = (
+            "Under each metric, ``precision_at_k_by_source`` (when present): same Carlini score, "
+            "but top-k and P@k are computed **only among rows with that** ``source`` "
+            f"(order follows ``mia_eval.carlini_sample_sources.GENERATION_SOURCES_ORDER``). "
+            "This is not merged across top_k / top_k_internet / temperature_decay."
+        )
     if y is None:
         results["no_true_label_note"] = (
             "Carlini Table-2 metrics use heterogeneous scales (e.g. perplexity is unbounded; "
@@ -470,6 +533,10 @@ def main() -> None:
             row["precision_at_k"] = {}
             for k in ks:
                 row["precision_at_k"][f"@{k}"] = precision_at_k(arr, y, k, lower_better=lower_better)
+            if not args.no_precision_by_source:
+                by_src = _precision_at_k_by_generation_source(arr, y, sources, ks, lower_better)
+                if by_src is not None:
+                    row["precision_at_k_by_source"] = by_src
         elif mia_opt is not None and ks:
             block = _proxy_precision_at_k_block(
                 arr, lower_better=lower_better, mia=mia_opt, ks=ks, thresholds=proxy_thr
