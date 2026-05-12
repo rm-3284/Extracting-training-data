@@ -10,6 +10,7 @@ generation:
     enabled: false
   memorization_detection:
     enabled: true
+    decode_top_k: 5
     num_samples_per_strategy: 500
     strategies:
       - memorization_risk_slow

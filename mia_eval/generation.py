@@ -456,7 +456,7 @@ def _append_memorization_detection_records(
 
     mod = _import_memorization_detection()
     prompt, max_new = _eos_like_prompt_and_max_new(tokenizer, seq_len)
-    decode_top_k = int(md_cfg.get("decode_top_k", 20))
+    decode_top_k = int(md_cfg.get("decode_top_k", 5))
     temperature = float(md_cfg.get("temperature", 1.0))
     gate_gamma = float(md_cfg.get("gate_gamma", 5.0))
     risk_every = int(md_cfg.get("risk_every", 1))

@@ -67,7 +67,7 @@ generation:
     #   - memorization_risk_slow
     #   # - memorization_wbc
     # reference_model: null   # HF id for WBC contrast model (e.g. smaller LM on same tokenizer)
-    decode_top_k: 20
+    decode_top_k: 5
     temperature: 1.0
     gate_gamma: 5.0
     risk_every: 1
