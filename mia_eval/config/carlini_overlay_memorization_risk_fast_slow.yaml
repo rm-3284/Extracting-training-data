@@ -1,0 +1,26 @@
+# Merge on top of ``carlini_open_models.yaml`` (same ``carlini_runs`` list):
+#   python -m mia_eval.run_carlini_extraction_batch \\
+#     --config mia_eval/config/carlini_open_models.yaml \\
+#     --merge-config mia_eval/config/carlini_overlay_memorization_risk_fast_slow.yaml \\
+#     --num-samples-per-strategy 500
+#
+# Writes only ``memorization_risk_fast`` + ``memorization_risk_slow`` (500 each → 1000 lines/run)
+# under a **separate** tree so existing Carlini ``samples.jsonl`` is not overwritten.
+#
+# Local ``run_carlini_memorization_risk_fast_slow_local.sh`` still uses this file (both decoders,
+# one output tree). On the cluster, submit ``jobscript/run_carlini_memorization_risk_fast_array.slurm``
+# and ``jobscript/run_carlini_memorization_risk_slow_array.slurm`` with the ``*_fast_only`` /
+# ``*_slow_only`` overlays (separate time limits).
+
+experiment:
+  carlini_extract_subdir: carlini_extract_memorization_risk_fast_slow
+
+generation:
+  carlini_sampling:
+    enabled: false
+  memorization_detection:
+    enabled: true
+    num_samples_per_strategy: 500
+    strategies:
+      - memorization_risk_fast
+      - memorization_risk_slow

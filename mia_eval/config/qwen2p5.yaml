@@ -46,6 +46,13 @@ models:
     tokenizer: alibaba-pai/DistilQwen2.5-7B-Instruct
     torch_dtype: bfloat16
 
+  # Distil instruct target; **base** 0.5B reference (non-instruct) for WBC exploratory contrast.
+  distil_qwen25_7b_instruct_wbc_ref_0p5b_base:
+    target_model: alibaba-pai/DistilQwen2.5-7B-Instruct
+    reference_model: Qwen/Qwen2.5-0.5B
+    tokenizer: alibaba-pai/DistilQwen2.5-7B-Instruct
+    torch_dtype: bfloat16
+
 # Fixed scoring hyperparameters (transfer-friendly defaults from mia_eval grid).
 score_sequence:
   infilling:

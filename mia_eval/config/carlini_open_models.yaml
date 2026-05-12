@@ -13,6 +13,10 @@ experiment:
   device: null
 
 generation:
+  # Top-k / internet / temperature / nucleus block. Set ``enabled: false`` to run only
+  # ``memorization_detection`` (see ``mia_eval/config/carlini_overlay_memorization_risk_fast_slow.yaml``).
+  carlini_sampling:
+    enabled: true
   # Match mia_eval/config/defaults.yaml — Carlini §5.1.1 style empty prompt → 256 tokens.
   # Per **enabled** method: `top_k`, `temperature_decay`, and (if nucleus.enabled) `nucleus`
   # each get this many lines. With internet_prefix (Carlini §5.1.2: CC prefix + top-n only) → 500×3 = 1500 rows/model.

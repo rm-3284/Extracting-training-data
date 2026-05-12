@@ -22,6 +22,14 @@ from .ground_truth import stream_texts
 from .model_utils import load_causal_lm, pick_device, torch_dtype_from_str
 
 
+def _carlini_sampling_enabled(gcfg: Dict[str, Any]) -> bool:
+    """When false, skip top_k / internet_prefix / temperature_decay / nucleus (memorization_detection only)."""
+    cs = gcfg.get("carlini_sampling") or {}
+    if not isinstance(cs, dict):
+        return True
+    return bool(cs.get("enabled", True))
+
+
 def _carlini_log(msg: str, *, verbose: bool = False) -> None:
     """Progress / debug lines (always flush for Slurm). Use CARLINI_VERBOSE=1 for extra detail."""
     if verbose and os.environ.get("CARLINI_VERBOSE", "").strip().lower() not in (
@@ -606,6 +614,7 @@ def generate_diverse_samples(
 
     records: List[Dict[str, Any]] = []
 
+    carlini_on = _carlini_sampling_enabled(gcfg)
     ipc = gcfg.get("internet_prefix") or {}
     internet_on = bool(ipc.get("enabled", False))
     text_iter: Optional[Iterator[str]] = None
@@ -614,37 +623,38 @@ def generate_diverse_samples(
     n_per_inet = n_per
     if ipc.get("num_samples_per_strategy") is not None:
         n_per_inet = int(ipc["num_samples_per_strategy"])
-    if internet_on:
-        _carlini_log("[generate] internet_prefix: opening text stream ...", verbose=False)
-        text_iter = _internet_text_stream(ipc)
-        skip0 = int(ipc.get("skip_initial_documents", 0))
-        for _ in range(max(skip0, 0)):
-            try:
-                next(text_iter)
-            except StopIteration:
-                raise RuntimeError("internet_prefix: skip_initial_documents exceeds stream") from None
+    if carlini_on:
+        if internet_on:
+            _carlini_log("[generate] internet_prefix: opening text stream ...", verbose=False)
+            text_iter = _internet_text_stream(ipc)
+            skip0 = int(ipc.get("skip_initial_documents", 0))
+            for _ in range(max(skip0, 0)):
+                try:
+                    next(text_iter)
+                except StopIteration:
+                    raise RuntimeError("internet_prefix: skip_initial_documents exceeds stream") from None
 
-    _carlini_log(
-        f"[generate] strategy top_k: target {n_per} samples (batch_size={bs}, seq_len={seq_len})",
-        verbose=False,
-    )
-    records.extend(
-        _run_strategy(
-            model,
-            tokenizer,
-            device,
-            n_per,
-            bs,
-            seq_len,
-            source="top_k",
-            top_k=top_k,
-            top_p=top_p,
-            logits_processors=None,
+        _carlini_log(
+            f"[generate] strategy top_k: target {n_per} samples (batch_size={bs}, seq_len={seq_len})",
+            verbose=False,
         )
-    )
-    _carlini_log(f"[generate] top_k done: {len(records)} rows so far", verbose=False)
+        records.extend(
+            _run_strategy(
+                model,
+                tokenizer,
+                device,
+                n_per,
+                bs,
+                seq_len,
+                source="top_k",
+                top_k=top_k,
+                top_p=top_p,
+                logits_processors=None,
+            )
+        )
+        _carlini_log(f"[generate] top_k done: {len(records)} rows so far", verbose=False)
 
-    if internet_on and text_iter is not None and _internet_applies_to(ipc, "top_k"):
+    if carlini_on and internet_on and text_iter is not None and _internet_applies_to(ipc, "top_k"):
         _carlini_log(
             f"[generate] strategy top_k_internet: target {n_per_inet} samples "
             f"(prefix_tokens={prefix_tokens})",
@@ -671,7 +681,7 @@ def generate_diverse_samples(
         _carlini_log(f"[generate] top_k_internet done: {len(records)} rows so far", verbose=False)
 
     td = gcfg.get("temperature_decay") or {}
-    if td.get("enabled", True):
+    if carlini_on and td.get("enabled", True):
         _carlini_log(
             f"[generate] strategy temperature_decay: target {n_per} samples",
             verbose=False,
@@ -724,7 +734,7 @@ def generate_diverse_samples(
             )
 
     nuc = gcfg.get("nucleus") or {}
-    if nuc.get("enabled"):
+    if carlini_on and nuc.get("enabled"):
         n_nuc = int(nuc.get("num_samples", n_per))
         _carlini_log(f"[generate] strategy nucleus: target {n_nuc} samples", verbose=False)
         records.extend(
@@ -772,6 +782,13 @@ def generate_diverse_samples(
                 f"[generate] nucleus_internet done: {len(records)} rows so far",
                 verbose=False,
             )
+
+    if not carlini_on:
+        _carlini_log(
+            "[generate] carlini_sampling disabled: skipped top_k / internet_prefix / "
+            "temperature_decay / nucleus",
+            verbose=False,
+        )
 
     md = gcfg.get("memorization_detection") or {}
     if isinstance(md, dict) and md.get("enabled"):

@@ -6,11 +6,13 @@ Reuses ``mia_eval.generation.generate_diverse_samples`` (same as ``run_pipeline 
 but iterates over many Hugging Face checkpoints from ``carlini_open_models.yaml``.
 
 Outputs, per run_key:
-  ``{experiment.output_dir}/carlini_extract/{run_key}/samples.jsonl``
-  ``{experiment.output_dir}/carlini_extract/{run_key}/run_meta.json``
+  ``{experiment.output_dir}/{experiment.carlini_extract_subdir|carlini_extract}/{run_key}/samples.jsonl``
+  ``…/run_meta.json``
 
 From repository root:
   python -m mia_eval.run_carlini_extraction_batch --config mia_eval/config/carlini_open_models.yaml
+  python -m mia_eval.run_carlini_extraction_batch --config mia_eval/config/carlini_open_models.yaml \\
+      --merge-config mia_eval/config/carlini_overlay_memorization_risk_fast_slow.yaml
   python -m mia_eval.run_carlini_extraction_batch --config mia_eval/config/carlini_open_models.yaml --only olmo2_7b_base,redpajama_7b_base
   python -m mia_eval.run_carlini_extraction_batch --num-samples-per-strategy 500   # override YAML
 """
@@ -35,8 +37,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from mia_eval.config_loader import load_yaml
-from mia_eval.generation import generate_diverse_samples
+from mia_eval.config_loader import deep_merge, load_yaml
+from mia_eval.generation import _carlini_sampling_enabled, generate_diverse_samples
 
 
 def _merge_manifest_runs(
@@ -163,6 +165,12 @@ def run() -> None:
         help="Shared manifest path (default: <output_root>/manifest.json).",
     )
     p.add_argument(
+        "--merge-config",
+        type=Path,
+        default=None,
+        help="Optional second YAML merged on top of --config (deep merge; same carlini_runs as base)",
+    )
+    p.add_argument(
         "--manifest-mode",
         type=str,
         choices=("merge", "replace"),
@@ -172,6 +180,10 @@ def run() -> None:
     args = p.parse_args()
 
     raw = load_yaml(args.config)
+    if args.merge_config is not None:
+        if not args.merge_config.is_file():
+            raise SystemExit(f"--merge-config not a file: {args.merge_config}")
+        raw = deep_merge(raw, load_yaml(args.merge_config))
     runs: List[Dict[str, Any]] = list(raw.get("carlini_runs") or [])
     if not runs:
         raise SystemExit("config has no carlini_runs")
@@ -180,11 +192,20 @@ def run() -> None:
     base_cfg = _build_pipeline_cfg(raw)
     gen = base_cfg.setdefault("generation", {})
     if args.num_samples_per_strategy is not None:
-        gen["num_samples_per_strategy"] = int(args.num_samples_per_strategy)
+        nps_cli = int(args.num_samples_per_strategy)
+        gen["num_samples_per_strategy"] = nps_cli
+        md_sub = gen.get("memorization_detection")
+        if isinstance(md_sub, dict) and md_sub.get("enabled"):
+            md_copy = copy.deepcopy(md_sub)
+            md_copy["num_samples_per_strategy"] = nps_cli
+            gen["memorization_detection"] = md_copy
     if args.batch_size is not None:
         gen["batch_size"] = int(args.batch_size)
     exp = base_cfg.get("experiment") or {}
-    out_root = ROOT / str(exp.get("output_dir", "mia_eval_outputs")) / "carlini_extract"
+    out_sub = str(exp.get("carlini_extract_subdir", "carlini_extract") or "carlini_extract").strip()
+    if not out_sub:
+        out_sub = "carlini_extract"
+    out_root = ROOT / str(exp.get("output_dir", "mia_eval_outputs")) / out_sub
     seed0 = int(exp.get("seed", 42))
 
     planned: List[Dict[str, Any]] = []
@@ -202,35 +223,40 @@ def run() -> None:
     if args.dry_run:
         gcfg = base_cfg.get("generation") or {}
         nps = int(gcfg.get("num_samples_per_strategy", 0))
-        nuc = (gcfg.get("nucleus") or {}) if isinstance(gcfg.get("nucleus"), dict) else {}
-        n_methods = 1  # top_k
-        temp_on = (gcfg.get("temperature_decay") or {}).get("enabled", True)
-        if temp_on:
-            n_methods += 1
-        nuc_on = bool(nuc.get("enabled"))
-        if nuc_on:
-            n_methods += 1
-        ip = gcfg.get("internet_prefix") or {}
-        inet_on = bool(ip.get("enabled"))
-        n_inet = int(ip["num_samples_per_strategy"]) if ip.get("num_samples_per_strategy") is not None else nps
-        n_nuc = int(nuc.get("num_samples", nps)) if nuc_on else 0
-        n_nuc_i = int(nuc.get("num_samples_internet", n_inet)) if nuc_on else 0
-        lines_plain = nps + (nps if temp_on else 0) + (n_nuc if nuc_on else 0)
-        raw_apply = ip.get("apply_to")
-        if raw_apply is None:
-            inet_strats = {"top_k"}
-        elif isinstance(raw_apply, str):
-            inet_strats = {raw_apply}
+        carlini_on = _carlini_sampling_enabled(gcfg)
+        if carlini_on:
+            nuc = (gcfg.get("nucleus") or {}) if isinstance(gcfg.get("nucleus"), dict) else {}
+            n_methods = 1  # top_k
+            temp_on = (gcfg.get("temperature_decay") or {}).get("enabled", True)
+            if temp_on:
+                n_methods += 1
+            nuc_on = bool(nuc.get("enabled"))
+            if nuc_on:
+                n_methods += 1
+            ip = gcfg.get("internet_prefix") or {}
+            inet_on = bool(ip.get("enabled"))
+            n_inet = int(ip["num_samples_per_strategy"]) if ip.get("num_samples_per_strategy") is not None else nps
+            n_nuc = int(nuc.get("num_samples", nps)) if nuc_on else 0
+            n_nuc_i = int(nuc.get("num_samples_internet", n_inet)) if nuc_on else 0
+            lines_plain = nps + (nps if temp_on else 0) + (n_nuc if nuc_on else 0)
+            raw_apply = ip.get("apply_to")
+            if raw_apply is None:
+                inet_strats = {"top_k"}
+            elif isinstance(raw_apply, str):
+                inet_strats = {raw_apply}
+            else:
+                inet_strats = set(raw_apply)
+            lines_inet = 0
+            if inet_on:
+                if "top_k" in inet_strats:
+                    lines_inet += n_inet
+                if temp_on and "temperature_decay" in inet_strats:
+                    lines_inet += n_inet
+                if nuc_on and "nucleus" in inet_strats:
+                    lines_inet += n_nuc_i
         else:
-            inet_strats = set(raw_apply)
-        lines_inet = 0
-        if inet_on:
-            if "top_k" in inet_strats:
-                lines_inet += n_inet
-            if temp_on and "temperature_decay" in inet_strats:
-                lines_inet += n_inet
-            if nuc_on and "nucleus" in inet_strats:
-                lines_inet += n_nuc_i
+            lines_plain = 0
+            lines_inet = 0
         md = gcfg.get("memorization_detection") or {}
         lines_mem = 0
         if isinstance(md, dict) and md.get("enabled"):

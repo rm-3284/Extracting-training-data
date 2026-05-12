@@ -1,0 +1,15 @@
+# Single decoder: ``memorization_risk_slow`` (500 lines/run by default).
+# Used by ``jobscript/run_carlini_memorization_risk_slow_array.slurm``.
+# Output tree is separate from ``..._fast_only`` so array jobs do not clobber ``samples.jsonl``.
+
+experiment:
+  carlini_extract_subdir: carlini_extract_memorization_risk_slow
+
+generation:
+  carlini_sampling:
+    enabled: false
+  memorization_detection:
+    enabled: true
+    num_samples_per_strategy: 500
+    strategies:
+      - memorization_risk_slow
