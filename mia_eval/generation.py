@@ -435,7 +435,7 @@ def _append_memorization_detection_records(
     model_bundle: Dict[str, Any],
     seq_len: int,
 ) -> None:
-    """Append samples from ``memorization_detection`` decoders (baseline / risk-aware / WBC)."""
+    """Append samples from ``memorization_detection`` decoders (baseline / risk-aware / WBC / cheap)."""
     strategies = list(md_cfg.get("strategies") or ())
     if not strategies:
         strategies = [
@@ -466,26 +466,46 @@ def _append_memorization_detection_records(
     wbc_infilling_lambda = float(md_cfg.get("wbc_infilling_lambda", 0.3))
     wbc_gate_gamma = md_cfg.get("wbc_gate_gamma")
     wbc_gate_every = int(md_cfg.get("wbc_gate_every", 4))
+    cheap_logits_lambda = float(md_cfg.get("cheap_logits_lambda", 0.35))
+    cheap_logits_entropy_sharpness = float(md_cfg.get("cheap_logits_entropy_sharpness", 0.5))
+    sparse_infilling_top_n = int(md_cfg.get("sparse_infilling_top_n", 3))
+    contrast_gate_gamma = float(md_cfg.get("contrast_gate_gamma", 2.0))
+    infilling_penalty_sign = float(md_cfg.get("infilling_penalty_sign", 1.0))
+    risk_explore_eps = float(md_cfg.get("risk_explore_eps", 0.07))
+    fast_aux_logprob_lambda = float(md_cfg.get("fast_aux_logprob_lambda", 0.05))
+    risk_score_mode = str(md_cfg.get("risk_score_mode", "delta"))
+    fast_infilling_window = int(md_cfg.get("fast_infilling_window", 64))
+    fast_infilling_m = int(md_cfg.get("fast_infilling_m", 5))
+    fast_infilling_k = float(md_cfg.get("fast_infilling_k", 0.1))
 
+    ref_strats_need_hf = frozenset(
+        {"memorization_wbc", "memorization_wbc_no_infilling", "memorization_contrastive"}
+    )
     ref_model = None
     ref_tokenizer = None
-    if "memorization_wbc" in strategies:
+    if ref_strats_need_hf.intersection(strategies):
         ref_id = md_cfg.get("reference_model") or model_bundle.get("reference_model")
         if not ref_id:
             _carlini_log(
-                "[generate] memorization_detection: memorization_wbc listed but no "
-                "``reference_model`` in YAML (set generation.memorization_detection.reference_model "
-                "or model_bundle.reference_model); skipping memorization_wbc.",
+                "[generate] memorization_detection: a strategy needs ``reference_model`` "
+                "(memorization_wbc | memorization_wbc_no_infilling | memorization_contrastive) "
+                "but none is set; skipping those strategies.",
                 verbose=False,
             )
-            strategies = [s for s in strategies if s != "memorization_wbc"]
+            strategies = [s for s in strategies if s not in ref_strats_need_hf]
         else:
             ref_tok = md_cfg.get("reference_tokenizer") or ref_id
             _carlini_log(
-                f"[generate] memorization_detection: loading reference {ref_id!r} for WBC …",
+                f"[generate] memorization_detection: loading reference {ref_id!r} …",
                 verbose=False,
             )
             ref_model, ref_tokenizer = load_causal_lm(str(ref_id), str(ref_tok), device, dtype)
+
+    if not strategies:
+        raise ValueError(
+            "memorization_detection: no strategies left to run "
+            "(check reference_model for WBC / contrastive / WBC-no-infilling)."
+        )
 
     try:
         for strat in strategies:
@@ -549,6 +569,94 @@ def _append_memorization_detection_records(
                             wbc_infilling_lambda=wbc_infilling_lambda,
                             wbc_gate_gamma=wbc_gate_gamma,
                             wbc_gate_every=wbc_gate_every,
+                            infilling_penalty_sign=infilling_penalty_sign,
+                            risk_score_mode=risk_score_mode,
+                            risk_explore_eps=risk_explore_eps,
+                            fast_infilling_window=fast_infilling_window,
+                            fast_infilling_m=fast_infilling_m,
+                            fast_infilling_k=fast_infilling_k,
+                            wbc_disable_infilling=False,
+                        )
+                    elif strat == "memorization_wbc_no_infilling":
+                        assert ref_model is not None
+                        text = mod.generate_risk_aware(
+                            prompt,
+                            model,
+                            tokenizer,
+                            max_new_tokens=max_new,
+                            top_k=decode_top_k,
+                            temperature=temperature,
+                            mode="wbc",
+                            gate_gamma=gate_gamma,
+                            risk_every=risk_every,
+                            reference_model=ref_model,
+                            reference_tokenizer=ref_tokenizer,
+                            wbc_lambda=wbc_lambda,
+                            wbc_infilling_lambda=wbc_infilling_lambda,
+                            wbc_gate_gamma=wbc_gate_gamma,
+                            wbc_gate_every=wbc_gate_every,
+                            infilling_penalty_sign=infilling_penalty_sign,
+                            risk_score_mode=risk_score_mode,
+                            risk_explore_eps=risk_explore_eps,
+                            fast_infilling_window=fast_infilling_window,
+                            fast_infilling_m=fast_infilling_m,
+                            fast_infilling_k=fast_infilling_k,
+                            wbc_disable_infilling=True,
+                        )
+                    elif strat == "memorization_cheap_logits":
+                        text = mod.generate_risk_aware(
+                            prompt,
+                            model,
+                            tokenizer,
+                            max_new_tokens=max_new,
+                            top_k=decode_top_k,
+                            temperature=temperature,
+                            mode="cheap_logits",
+                            gate_gamma=gate_gamma,
+                            risk_every=risk_every,
+                            cheap_logits_lambda=cheap_logits_lambda,
+                            cheap_logits_entropy_sharpness=cheap_logits_entropy_sharpness,
+                            infilling_penalty_sign=infilling_penalty_sign,
+                            risk_explore_eps=risk_explore_eps,
+                        )
+                    elif strat == "memorization_contrastive":
+                        assert ref_model is not None
+                        text = mod.generate_risk_aware(
+                            prompt,
+                            model,
+                            tokenizer,
+                            max_new_tokens=max_new,
+                            top_k=decode_top_k,
+                            temperature=temperature,
+                            mode="contrastive",
+                            gate_gamma=gate_gamma,
+                            risk_every=risk_every,
+                            reference_model=ref_model,
+                            reference_tokenizer=ref_tokenizer,
+                            wbc_lambda=wbc_lambda,
+                            contrast_gate_gamma=contrast_gate_gamma,
+                            risk_explore_eps=risk_explore_eps,
+                        )
+                    elif strat == "memorization_sparse_infilling":
+                        text = mod.generate_risk_aware(
+                            prompt,
+                            model,
+                            tokenizer,
+                            max_new_tokens=max_new,
+                            top_k=decode_top_k,
+                            lambda_penalty=lam_fast,
+                            temperature=temperature,
+                            mode="sparse_infilling",
+                            gate_gamma=gate_gamma,
+                            risk_every=risk_every,
+                            sparse_infilling_top_n=sparse_infilling_top_n,
+                            infilling_penalty_sign=infilling_penalty_sign,
+                            risk_score_mode=risk_score_mode,
+                            risk_explore_eps=risk_explore_eps,
+                            fast_aux_logprob_lambda=fast_aux_logprob_lambda,
+                            fast_infilling_window=fast_infilling_window,
+                            fast_infilling_m=fast_infilling_m,
+                            fast_infilling_k=fast_infilling_k,
                         )
                     else:
                         raise RuntimeError(f"unhandled strategy {strat!r}")

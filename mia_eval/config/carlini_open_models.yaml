@@ -56,7 +56,9 @@ generation:
   add_wikipedia_nonmembers: 0
   # Optional: ``memorization_detection/memorization_detection.py`` decoders (sequential; slow is costly).
   # Each listed strategy appends ``num_samples_per_strategy`` rows with ``source`` =
-  # memorization_baseline | memorization_risk_fast | memorization_risk_slow | memorization_wbc.
+  # memorization_baseline | memorization_risk_fast | memorization_risk_slow | memorization_wbc |
+  # memorization_wbc_no_infilling | memorization_cheap_logits | memorization_contrastive |
+  # memorization_sparse_infilling.
   # For ``memorization_wbc``, set ``reference_model`` here and/or ``reference_model`` on a ``carlini_runs`` row.
   memorization_detection:
     enabled: false
@@ -79,6 +81,15 @@ generation:
 
 # Each entry becomes output_dir/carlini_extract/<run_key>/samples.jsonl
 carlini_runs:
+  # --- GPT-Neo (EleutherAI; The Pile) ---
+  - run_key: gpt_neo_2p7
+    project: GPTNeo
+    hf_model_id: EleutherAI/gpt-neo-2.7B
+    variant: base
+    post_training: null
+    torch_dtype: float16
+    reference_model: EleutherAI/gpt-neo-125M
+
   # --- OLMo 2 (Ai2) ---
   - run_key: olmo2_7b_base
     project: OLMo2

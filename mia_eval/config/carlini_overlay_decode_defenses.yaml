@@ -1,0 +1,38 @@
+# Merge on top of ``carlini_open_models.yaml`` to benchmark **cheap** decode-time defenses
+# alongside standard Carlini extraction (top_k, temperature_decay, internet variants, etc.)
+# so you can compare ``source`` slices in one ``samples.jsonl``.
+#
+#   python -m mia_eval.run_decode_defense_pipeline \\
+#     --config mia_eval/config/carlini_open_models.yaml \\
+#     --merge-config mia_eval/config/carlini_overlay_decode_defenses.yaml \\
+#     --only pythia_12b_base --num-samples-per-strategy 32
+#
+# Set ``reference_model`` on each ``carlini_runs`` row (or under ``generation.memorization_detection``)
+# for ``memorization_contrastive`` and ``memorization_wbc_no_infilling``.
+
+experiment:
+  carlini_extract_subdir: carlini_extract_decode_defenses
+
+generation:
+  # Keep default from base YAML (true): do **not** turn off Carlini sampling here.
+  carlini_sampling:
+    enabled: true
+  memorization_detection:
+    enabled: true
+    decode_top_k: 5
+    num_samples_per_strategy: 128
+    reference_model: null
+    strategies:
+      - memorization_baseline
+      - memorization_cheap_logits
+      - memorization_sparse_infilling
+      - memorization_contrastive
+      - memorization_wbc_no_infilling
+    cheap_logits_lambda: 0.35
+    cheap_logits_entropy_sharpness: 0.5
+    sparse_infilling_top_n: 3
+    contrast_gate_gamma: 2.0
+    lambda_penalty_fast: 0.3
+    wbc_lambda: 0.5
+    wbc_infilling_lambda: 0.3
+    wbc_gate_every: 4

@@ -22,6 +22,10 @@ MEMORIZATION_DETECTION_SOURCES: tuple[str, ...] = (
     "memorization_risk_fast",
     "memorization_risk_slow",
     "memorization_wbc",
+    "memorization_wbc_no_infilling",
+    "memorization_cheap_logits",
+    "memorization_contrastive",
+    "memorization_sparse_infilling",
 )
 
 # Stable column / iteration order for reporting (subset may appear in any given run).
