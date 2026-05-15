@@ -469,6 +469,7 @@ def _append_memorization_detection_records(
     cheap_logits_lambda = float(md_cfg.get("cheap_logits_lambda", 0.35))
     cheap_logits_entropy_sharpness = float(md_cfg.get("cheap_logits_entropy_sharpness", 0.5))
     sparse_infilling_top_n = int(md_cfg.get("sparse_infilling_top_n", 3))
+    sparse_always_score_candidates = bool(md_cfg.get("sparse_always_score_candidates", False))
     contrast_gate_gamma = float(md_cfg.get("contrast_gate_gamma", 2.0))
     infilling_penalty_sign = float(md_cfg.get("infilling_penalty_sign", 1.0))
     risk_explore_eps = float(md_cfg.get("risk_explore_eps", 0.07))
@@ -650,6 +651,7 @@ def _append_memorization_detection_records(
                             gate_gamma=gate_gamma,
                             risk_every=risk_every,
                             sparse_infilling_top_n=sparse_infilling_top_n,
+                            sparse_always_score_candidates=sparse_always_score_candidates,
                             infilling_penalty_sign=infilling_penalty_sign,
                             risk_score_mode=risk_score_mode,
                             risk_explore_eps=risk_explore_eps,

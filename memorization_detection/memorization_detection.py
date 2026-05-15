@@ -611,15 +611,23 @@ def risk_aware_next_token_sparse(
     risk_every=1,
     gate_gamma=DEFAULT_GATE_GAMMA,
     sparse_infilling_top_n: int = 3,
+    sparse_always_score_candidates: bool = False,
     infilling_penalty_sign: float = 1.0,
     risk_score_mode: str = "delta",
     risk_explore_eps: float = 0.07,
     aux_logprob_lambda: float = 0.05,
 ):
     """
-    Prefix infilling gate (cached every ``risk_every``); full per-candidate infilling only for
-    the top-``sparse_infilling_top_n`` candidates by model log-probability (rest use prefix risk).
-    Cost: 1 + min(top_k, sparse_infilling_top_n) infilling calls per step (plus periodic prefix).
+    Prefix infilling gate (cached every ``risk_every`` tokens, same as fast); optionally score
+    only the top-``sparse_infilling_top_n`` candidates with infilling.
+
+    By default (``sparse_always_score_candidates=False``), candidate infilling runs **only on
+    steps where the prefix infilling score is recomputed** (same cadence as ``risk_every``).
+    That avoids ~``sparse_infilling_top_n`` expensive infilling passes on every token while the
+    prefix cache is cold — the behavior that made sparse runs ~100× slower than cheap logits.
+
+    Set ``sparse_always_score_candidates=True`` for the legacy per-step candidate infilling
+    (very costly; raise ``risk_every`` and shrink ``window`` if you use it).
     """
     outputs = model(input_ids=input_ids, attention_mask=attention_mask)
     logits = outputs.logits[:, -1, :]
@@ -627,10 +635,11 @@ def risk_aware_next_token_sparse(
     base_log_probs = F.log_softmax(logits / temperature, dim=-1)
     topk_log_probs, topk_ids = torch.topk(base_log_probs, k=top_k, dim=-1)
 
-    step = input_ids.shape[1]
+    step = int(input_ids.shape[1])
     prefix_text = tokenizer.decode(input_ids[0].detach().cpu(), skip_special_tokens=False)
 
-    if risk_every <= 1 or step % risk_every == 0 or RISK_CACHE["step"] < 0:
+    refresh_prefix = risk_every <= 1 or step % risk_every == 0 or RISK_CACHE["step"] < 0
+    if refresh_prefix:
         RISK_CACHE["risk"] = prefix_infilling_score(
             model, tokenizer, prefix_text, window=window, m=m, k=k
         )
@@ -647,8 +656,11 @@ def risk_aware_next_token_sparse(
     )
 
     n_inf = max(0, int(sparse_infilling_top_n))
-    order = torch.argsort(topk_log_probs[0], descending=True)
-    infill_set = set(int(order[j].item()) for j in range(min(n_inf, top_k)))
+    if sparse_always_score_candidates or refresh_prefix:
+        order = torch.argsort(topk_log_probs[0], descending=True)
+        infill_set = set(int(order[j].item()) for j in range(min(n_inf, top_k)))
+    else:
+        infill_set = set()
 
     risks = []
     for j in range(top_k):
@@ -711,6 +723,7 @@ def generate_risk_aware(
     cheap_logits_lambda: float = 0.35,
     cheap_logits_entropy_sharpness: float = 0.5,
     sparse_infilling_top_n: int = 3,
+    sparse_always_score_candidates: bool = False,
     contrast_gate_gamma: float = 2.0,
     wbc_disable_infilling: bool = False,
 ):
@@ -809,6 +822,7 @@ def generate_risk_aware(
                 risk_every=risk_every,
                 gate_gamma=gate_gamma,
                 sparse_infilling_top_n=sparse_infilling_top_n,
+                sparse_always_score_candidates=sparse_always_score_candidates,
                 infilling_penalty_sign=infilling_penalty_sign,
                 risk_score_mode=risk_score_mode,
                 risk_explore_eps=risk_explore_eps,

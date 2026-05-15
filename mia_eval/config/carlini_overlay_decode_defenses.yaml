@@ -10,6 +10,9 @@
 # Set ``reference_model`` on each ``carlini_runs`` row (or under ``generation.memorization_detection``)
 # for ``memorization_contrastive`` and ``memorization_wbc_no_infilling``.
 
+# ``sparse_always_score_candidates: true`` restores the old per-token candidate infilling
+# (very slow). Defaults in this overlay keep sparse usable on a cluster.
+
 experiment:
   carlini_extract_subdir: carlini_extract_decode_defenses
 
@@ -22,6 +25,9 @@ generation:
     decode_top_k: 5
     num_samples_per_strategy: 128
     reference_model: null
+    # Prefix infilling recomputation cadence (also gates sparse **candidate** infilling by default).
+    risk_every: 8
+    fast_infilling_window: 32
     strategies:
       - memorization_baseline
       - memorization_cheap_logits
