@@ -224,6 +224,16 @@ def _label_one_run(
         else:
             corp_path = Path(args.training_corpora_yaml)
             sources, corp_defaults, note = _resolve_yaml_training_spec(run_dir, corp_path)
+            if args.max_documents is not None:
+                md_over = int(args.max_documents)
+                sources = [
+                    {**src, "max_documents": md_over} if isinstance(src, dict) else src
+                    for src in sources
+                ]
+                print(
+                    f"[index] {run_dir.name}: overriding max_documents={md_over} for all YAML sources",
+                    file=sys.stderr,
+                )
             sc = (
                 args.shingle_chars
                 if args.shingle_chars is not None
@@ -341,7 +351,15 @@ def main() -> None:
         default="",
         help="(Legacy mode) Text column name.",
     )
-    ap.add_argument("--max-documents", type=int, default=None)
+    ap.add_argument(
+        "--max-documents",
+        type=int,
+        default=None,
+        help=(
+            "Cap documents streamed **per YAML source** when using --training-corpora-yaml "
+            "(overrides each source's max_documents for that run). Also used in --legacy-generic-corpora mode."
+        ),
+    )
     ap.add_argument("--shingle-chars", type=int, default=None)
     ap.add_argument("--max-shingles", type=int, default=None)
     ap.add_argument("--min-match-chars", type=int, default=None)

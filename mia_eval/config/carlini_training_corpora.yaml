@@ -114,6 +114,15 @@ run_training_corpora:
         token_field: token_ids
         max_documents: 6000
 
+  # --- GPT-Neo (EleutherAI The Pile) ---
+  gpt_neo_2p7:
+    note: "EleutherAI/gpt-neo-2.7B trained on The Pile (same public slice as pythia_12b_base)."
+    sources:
+      - dataset_name: EleutherAI/the_pile_deduplicated
+        dataset_config: null
+        text_field: text
+        max_documents: 20000
+
   # --- Pythia / Dolly (EleutherAI The Pile) ---
   pythia_12b_base:
     note: "EleutherAI/pythia trained on The Pile."
