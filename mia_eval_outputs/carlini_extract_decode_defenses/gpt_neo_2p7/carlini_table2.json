@@ -1,0 +1,500 @@
+{
+  "model_key": "gpt_neo_2p7",
+  "target_model": "EleutherAI/gpt-neo-2.7B",
+  "reference_model": "EleutherAI/gpt-neo-125M",
+  "input": "/n/fs/vision-mix/rm4411/Extracting-training-data/mia_eval_outputs/carlini_extract_decode_defenses/gpt_neo_2p7/samples_labeled.jsonl",
+  "n_samples": 2139,
+  "max_length_tokens": 256,
+  "window": 50,
+  "has_labels": true,
+  "has_mia_gt_primary_for_proxy": false,
+  "proxy_thresholds_json": null,
+  "metrics": {
+    "Perplexity": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 0.88,
+        "@100": 0.92
+      },
+      "precision_at_k_by_source": {
+        "top_k": {
+          "n_samples": 498,
+          "n_positive": 488,
+          "n_negative": 10,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 0.84,
+            "@100": 0.9
+          }
+        },
+        "top_k_internet": {
+          "n_samples": 500,
+          "n_positive": 498,
+          "n_negative": 2,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 0.98,
+            "@100": 0.99
+          }
+        },
+        "temperature_decay": {
+          "n_samples": 500,
+          "n_positive": 493,
+          "n_negative": 7,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_baseline": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_wbc_no_infilling": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_cheap_logits": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_contrastive": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_sparse_infilling": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        }
+      }
+    },
+    "Small": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 0.96,
+        "@100": 0.98
+      },
+      "precision_at_k_by_source": {
+        "top_k": {
+          "n_samples": 498,
+          "n_positive": 488,
+          "n_negative": 10,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 0.96,
+            "@100": 0.97
+          }
+        },
+        "top_k_internet": {
+          "n_samples": 500,
+          "n_positive": 498,
+          "n_negative": 2,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "temperature_decay": {
+          "n_samples": 500,
+          "n_positive": 493,
+          "n_negative": 7,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_baseline": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_wbc_no_infilling": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_cheap_logits": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_contrastive": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_sparse_infilling": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        }
+      }
+    },
+    "zlib": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 0.92,
+        "@100": 0.93
+      },
+      "precision_at_k_by_source": {
+        "top_k": {
+          "n_samples": 498,
+          "n_positive": 488,
+          "n_negative": 10,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 0.88,
+            "@100": 0.91
+          }
+        },
+        "top_k_internet": {
+          "n_samples": 500,
+          "n_positive": 498,
+          "n_negative": 2,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 0.98,
+            "@100": 0.99
+          }
+        },
+        "temperature_decay": {
+          "n_samples": 500,
+          "n_positive": 493,
+          "n_negative": 7,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_baseline": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_wbc_no_infilling": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_cheap_logits": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_contrastive": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_sparse_infilling": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        }
+      }
+    },
+    "Lowercase": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 1.0,
+        "@50": 0.96,
+        "@100": 0.95
+      },
+      "precision_at_k_by_source": {
+        "top_k": {
+          "n_samples": 498,
+          "n_positive": 488,
+          "n_negative": 10,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 0.9,
+            "@100": 0.94
+          }
+        },
+        "top_k_internet": {
+          "n_samples": 500,
+          "n_positive": 498,
+          "n_negative": 2,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 0.98,
+            "@100": 0.99
+          }
+        },
+        "temperature_decay": {
+          "n_samples": 500,
+          "n_positive": 493,
+          "n_negative": 7,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_baseline": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_wbc_no_infilling": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_cheap_logits": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_contrastive": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_sparse_infilling": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        }
+      }
+    },
+    "Window": {
+      "lower_is_more_memorized_like": true,
+      "aggregate_over_samples": {
+        "mean": NaN,
+        "sum": NaN,
+        "std": NaN,
+        "min": NaN,
+        "max": NaN
+      },
+      "precision_at_k": {
+        "@10": 0.7,
+        "@50": 0.92,
+        "@100": 0.91
+      },
+      "precision_at_k_by_source": {
+        "top_k": {
+          "n_samples": 498,
+          "n_positive": 488,
+          "n_negative": 10,
+          "precision_at_k": {
+            "@10": 0.6,
+            "@50": 0.84,
+            "@100": 0.92
+          }
+        },
+        "top_k_internet": {
+          "n_samples": 500,
+          "n_positive": 498,
+          "n_negative": 2,
+          "precision_at_k": {
+            "@10": 0.9,
+            "@50": 0.98,
+            "@100": 0.99
+          }
+        },
+        "temperature_decay": {
+          "n_samples": 500,
+          "n_positive": 493,
+          "n_negative": 7,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_baseline": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_wbc_no_infilling": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_cheap_logits": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_contrastive": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        },
+        "memorization_sparse_infilling": {
+          "n_samples": 128,
+          "n_positive": 128,
+          "n_negative": 0,
+          "precision_at_k": {
+            "@10": 1.0,
+            "@50": 1.0,
+            "@100": 1.0
+          }
+        }
+      }
+    }
+  },
+  "precision_at_k_by_source_note": "Under each metric, ``precision_at_k_by_source`` (when present): same Carlini score, but top-k and P@k are computed **only among rows with that** ``source`` (order follows ``mia_eval.carlini_sample_sources.GENERATION_SOURCES_ORDER``). This is not merged across top_k / top_k_internet / temperature_decay."
+}
