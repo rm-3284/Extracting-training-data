@@ -17,7 +17,11 @@ except ImportError:
 
 import torch
 
-from .carlini_sample_sources import MEMORIZATION_DETECTION_SOURCES
+from .carlini_sample_sources import (
+    CARLINI_EXTRACTION_SOURCES,
+    GENERATION_SOURCES_ORDER,
+    MEMORIZATION_DETECTION_SOURCES,
+)
 from .ground_truth import stream_texts
 from .model_utils import load_causal_lm, pick_device, torch_dtype_from_str
 
@@ -677,6 +681,167 @@ def _append_memorization_detection_records(
             del ref_model
         if ref_tokenizer is not None:
             del ref_tokenizer
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
+
+
+def generate_samples_for_source(
+    cfg: Dict[str, Any],
+    model_bundle: Dict[str, Any],
+    source: str,
+    out_path: Path,
+    *,
+    num_samples: Optional[int] = None,
+) -> Path:
+    """
+    Generate exactly ``num_samples`` rows for a single ``source`` tag (one generation method).
+
+    Used by Slurm array jobs so each task writes e.g.
+    ``…/{run_key}/by_method/{source}/samples.jsonl`` with a fixed count per method.
+    """
+    src = str(source).strip()
+    if src not in GENERATION_SOURCES_ORDER:
+        raise ValueError(
+            f"Unknown source {src!r}; allowed: {list(GENERATION_SOURCES_ORDER)}"
+        )
+
+    gcfg = cfg.get("generation") or {}
+    exp = cfg.get("experiment") or {}
+    device = pick_device(exp.get("device"))
+    dtype = torch_dtype_from_str(model_bundle.get("torch_dtype"))
+
+    target = model_bundle["target_model"]
+    tokenizer_id = model_bundle.get("tokenizer") or target
+    n = int(num_samples if num_samples is not None else gcfg.get("num_samples_per_strategy", 32))
+    if n <= 0:
+        raise ValueError("num_samples must be positive")
+
+    seq_len = int(gcfg.get("seq_len", 256))
+    bs = int(gcfg.get("batch_size", 4))
+    top_k = int(gcfg.get("top_k", 40))
+    top_p = float(gcfg.get("top_p", 1.0))
+    ipc = gcfg.get("internet_prefix") or {}
+    internet_on = bool(ipc.get("enabled", False))
+    prefix_tokens = int(ipc.get("prefix_tokens", 10))
+    prefix_chars_max = int(ipc.get("prefix_chars_max", 512))
+    n_per_inet = int(ipc.get("num_samples_per_strategy", n)) if ipc.get("num_samples_per_strategy") else n
+
+    _carlini_log(
+        f"[generate] single source={src!r} n={n} model={target!r} out={out_path}",
+        verbose=False,
+    )
+
+    model, tokenizer = load_causal_lm(target, tokenizer_id, device, dtype)
+    records: List[Dict[str, Any]] = []
+
+    try:
+        if src in MEMORIZATION_DETECTION_SOURCES:
+            md = dict(gcfg.get("memorization_detection") or {})
+            md["enabled"] = True
+            md["strategies"] = [src]
+            md["num_samples_per_strategy"] = n
+            _append_memorization_detection_records(
+                records,
+                md_cfg=md,
+                model=model,
+                tokenizer=tokenizer,
+                device=device,
+                dtype=dtype,
+                model_bundle=model_bundle,
+                seq_len=seq_len,
+            )
+        elif src in CARLINI_EXTRACTION_SOURCES:
+            nuc = gcfg.get("nucleus") or {}
+            if src in ("nucleus", "nucleus_internet") and not nuc.get("enabled"):
+                raise ValueError(
+                    f"source {src!r} requires generation.nucleus.enabled in YAML"
+                )
+            if src.endswith("_internet") and not internet_on:
+                raise ValueError(
+                    f"source {src!r} requires generation.internet_prefix.enabled in YAML"
+                )
+
+            text_iter: Optional[Iterator[str]] = None
+            if src.endswith("_internet"):
+                _carlini_log("[generate] opening internet_prefix stream …", verbose=False)
+                text_iter = _internet_text_stream(ipc)
+                skip0 = int(ipc.get("skip_initial_documents", 0))
+                for _ in range(max(skip0, 0)):
+                    try:
+                        next(text_iter)
+                    except StopIteration:
+                        raise RuntimeError(
+                            "internet_prefix: skip_initial_documents exceeds stream"
+                        ) from None
+
+            lp: Optional[LogitsProcessorList] = None
+            if src in ("temperature_decay", "temperature_decay_internet"):
+                lp = LogitsProcessorList([DecayingTemperatureLogitsProcessor()])
+
+            if src in ("nucleus", "nucleus_internet"):
+                strat_top_k = 0
+                strat_top_p = float(nuc.get("top_p", 0.95))
+                strat_temp = float(nuc.get("temperature", 1.0))
+                strat_n = n
+            else:
+                strat_top_k = top_k
+                strat_top_p = top_p
+                strat_temp = 1.0
+                strat_n = n
+
+            if src.endswith("_internet"):
+                assert text_iter is not None
+                records.extend(
+                    _run_strategy_internet(
+                        model,
+                        tokenizer,
+                        device,
+                        strat_n,
+                        bs,
+                        seq_len,
+                        source=src,
+                        top_k=strat_top_k,
+                        top_p=strat_top_p,
+                        logits_processors=lp,
+                        temperature=strat_temp,
+                        text_iter=text_iter,
+                        prefix_tokens=prefix_tokens,
+                        prefix_chars_max=prefix_chars_max,
+                    )
+                )
+            else:
+                records.extend(
+                    _run_strategy(
+                        model,
+                        tokenizer,
+                        device,
+                        strat_n,
+                        bs,
+                        seq_len,
+                        source=src,
+                        top_k=strat_top_k,
+                        top_p=strat_top_p,
+                        logits_processors=lp,
+                        temperature=strat_temp,
+                    )
+                )
+        else:
+            raise ValueError(f"Unhandled source {src!r}")
+
+        if len(records) != n:
+            _carlini_log(
+                f"[generate] warning: expected {n} rows for {src!r}, got {len(records)}",
+                verbose=False,
+            )
+
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, "w", encoding="utf-8") as f:
+            for r in records:
+                f.write(json.dumps(r, ensure_ascii=False) + "\n")
+        _carlini_log(f"[generate] wrote {len(records)} lines → {out_path}", verbose=False)
+        return out_path
+    finally:
+        del model, tokenizer
         if device.type == "cuda":
             torch.cuda.empty_cache()
 

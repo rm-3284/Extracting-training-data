@@ -23,7 +23,7 @@ generation:
   memorization_detection:
     enabled: true
     decode_top_k: 5
-    num_samples_per_strategy: 128
+    num_samples_per_strategy: 500
     reference_model: null
     # Prefix infilling recomputation cadence (also gates sparse **candidate** infilling by default).
     risk_every: 8
