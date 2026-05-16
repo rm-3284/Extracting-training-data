@@ -1,0 +1,70 @@
+{
+  "run_key": "gpt_neo_2p7",
+  "project": "GPTNeo",
+  "hf_model_id": "EleutherAI/gpt-neo-2.7B",
+  "tokenizer": "EleutherAI/gpt-neo-2.7B",
+  "torch_dtype": "float16",
+  "variant": "base",
+  "post_training": null,
+  "generation": {
+    "carlini_sampling": {
+      "enabled": true
+    },
+    "num_samples_per_strategy": 500,
+    "batch_size": 4,
+    "seq_len": 256,
+    "top_k": 40,
+    "top_p": 1.0,
+    "temperature_decay": {
+      "enabled": true
+    },
+    "nucleus": {
+      "enabled": false,
+      "top_p": 0.95,
+      "temperature": 1.0
+    },
+    "internet_prefix": {
+      "enabled": true,
+      "apply_to": [
+        "top_k"
+      ],
+      "dataset_name": "allenai/c4",
+      "dataset_config": "en",
+      "text_field": "text",
+      "split": "train",
+      "prefix_tokens": 10,
+      "min_doc_chars": 80,
+      "prefix_chars_max": 512,
+      "skip_initial_documents": 0
+    },
+    "add_training_excerpts_members": 0,
+    "add_wikipedia_nonmembers": 0,
+    "memorization_detection": {
+      "enabled": true,
+      "decode_top_k": 5,
+      "temperature": 1.0,
+      "gate_gamma": 5.0,
+      "risk_every": 8,
+      "lambda_penalty_fast": 0.3,
+      "lambda_penalty_slow": 0.5,
+      "wbc_lambda": 0.5,
+      "wbc_infilling_lambda": 0.3,
+      "wbc_gate_every": 4,
+      "num_samples_per_strategy": 128,
+      "reference_model": null,
+      "fast_infilling_window": 32,
+      "strategies": [
+        "memorization_baseline",
+        "memorization_cheap_logits",
+        "memorization_sparse_infilling",
+        "memorization_contrastive",
+        "memorization_wbc_no_infilling"
+      ],
+      "cheap_logits_lambda": 0.35,
+      "cheap_logits_entropy_sharpness": 0.5,
+      "sparse_infilling_top_n": 3,
+      "contrast_gate_gamma": 2.0
+    }
+  },
+  "seed": 42
+}
