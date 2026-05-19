@@ -460,7 +460,8 @@ def _append_memorization_detection_records(
 
     mod = _import_memorization_detection()
     prompt, max_new = _eos_like_prompt_and_max_new(tokenizer, seq_len)
-    decode_top_k = int(md_cfg.get("decode_top_k", 5))
+    carlini_match_top_k = int(md_cfg.get("carlini_match_top_k", 40))
+    decode_top_k = int(md_cfg.get("decode_top_k", carlini_match_top_k))
     temperature = float(md_cfg.get("temperature", 1.0))
     gate_gamma = float(md_cfg.get("gate_gamma", 5.0))
     risk_every = int(md_cfg.get("risk_every", 1))
@@ -476,15 +477,27 @@ def _append_memorization_detection_records(
     sparse_always_score_candidates = bool(md_cfg.get("sparse_always_score_candidates", False))
     contrast_gate_gamma = float(md_cfg.get("contrast_gate_gamma", 2.0))
     infilling_penalty_sign = float(md_cfg.get("infilling_penalty_sign", 1.0))
-    risk_explore_eps = float(md_cfg.get("risk_explore_eps", 0.07))
+    risk_explore_eps = float(md_cfg.get("risk_explore_eps", 0.02))
     fast_aux_logprob_lambda = float(md_cfg.get("fast_aux_logprob_lambda", 0.05))
     risk_score_mode = str(md_cfg.get("risk_score_mode", "delta"))
     fast_infilling_window = int(md_cfg.get("fast_infilling_window", 64))
     fast_infilling_m = int(md_cfg.get("fast_infilling_m", 5))
     fast_infilling_k = float(md_cfg.get("fast_infilling_k", 0.1))
+    ppl_gate_threshold = md_cfg.get("ppl_gate_threshold", 20.0)
+    ppl_gate_window = int(md_cfg.get("ppl_gate_window", 50))
+    ppl_resample_threshold = float(md_cfg.get("ppl_resample_threshold", 25.0))
+    max_resamples = int(md_cfg.get("max_resamples", 2))
+    cheap_logits_margin_threshold = float(md_cfg.get("cheap_logits_margin_threshold", 1.0))
+    carlini_top_p = float(md_cfg.get("carlini_top_p", 1.0))
 
     ref_strats_need_hf = frozenset(
-        {"memorization_wbc", "memorization_wbc_no_infilling", "memorization_contrastive"}
+        {
+            "memorization_wbc",
+            "memorization_wbc_no_infilling",
+            "memorization_contrastive",
+            "memorization_ppl_gated_contrastive",
+            "memorization_resample_contrastive",
+        }
     )
     ref_model = None
     ref_tokenizer = None
@@ -493,7 +506,7 @@ def _append_memorization_detection_records(
         if not ref_id:
             _carlini_log(
                 "[generate] memorization_detection: a strategy needs ``reference_model`` "
-                "(memorization_wbc | memorization_wbc_no_infilling | memorization_contrastive) "
+                "(WBC / contrastive / ppl_gated / resample_contrastive) "
                 "but none is set; skipping those strategies.",
                 verbose=False,
             )
@@ -525,6 +538,16 @@ def _append_memorization_detection_records(
                             tokenizer,
                             max_new_tokens=max_new,
                             temperature=temperature,
+                        )
+                    elif strat == "memorization_topk_control":
+                        text = mod.generate_carlini_topk_control(
+                            prompt,
+                            model,
+                            tokenizer,
+                            max_new_tokens=max_new,
+                            temperature=temperature,
+                            top_k=carlini_match_top_k,
+                            top_p=carlini_top_p,
                         )
                     elif strat == "memorization_risk_fast":
                         text = mod.generate_risk_aware(
@@ -621,8 +644,10 @@ def _append_memorization_detection_records(
                             risk_every=risk_every,
                             cheap_logits_lambda=cheap_logits_lambda,
                             cheap_logits_entropy_sharpness=cheap_logits_entropy_sharpness,
+                            cheap_logits_margin_threshold=cheap_logits_margin_threshold,
                             infilling_penalty_sign=infilling_penalty_sign,
                             risk_explore_eps=risk_explore_eps,
+                            carlini_top_k=carlini_match_top_k,
                         )
                     elif strat == "memorization_contrastive":
                         assert ref_model is not None
@@ -641,6 +666,52 @@ def _append_memorization_detection_records(
                             wbc_lambda=wbc_lambda,
                             contrast_gate_gamma=contrast_gate_gamma,
                             risk_explore_eps=risk_explore_eps,
+                            carlini_top_k=carlini_match_top_k,
+                            contrast_always_apply=True,
+                            cheap_logits_margin_threshold=cheap_logits_margin_threshold,
+                        )
+                    elif strat == "memorization_ppl_gated_contrastive":
+                        assert ref_model is not None
+                        text = mod.generate_risk_aware(
+                            prompt,
+                            model,
+                            tokenizer,
+                            max_new_tokens=max_new,
+                            top_k=decode_top_k,
+                            temperature=temperature,
+                            mode="ppl_gated_contrastive",
+                            gate_gamma=gate_gamma,
+                            risk_every=risk_every,
+                            reference_model=ref_model,
+                            reference_tokenizer=ref_tokenizer,
+                            wbc_lambda=wbc_lambda,
+                            contrast_gate_gamma=contrast_gate_gamma,
+                            risk_explore_eps=risk_explore_eps,
+                            carlini_top_k=carlini_match_top_k,
+                            ppl_gate_threshold=float(ppl_gate_threshold)
+                            if ppl_gate_threshold is not None
+                            else 20.0,
+                            ppl_gate_window=ppl_gate_window,
+                            cheap_logits_margin_threshold=cheap_logits_margin_threshold,
+                        )
+                    elif strat == "memorization_resample_contrastive":
+                        assert ref_model is not None
+                        text = mod.generate_risk_aware(
+                            prompt,
+                            model,
+                            tokenizer,
+                            max_new_tokens=max_new,
+                            top_k=decode_top_k,
+                            temperature=temperature,
+                            mode="resample_contrastive",
+                            reference_model=ref_model,
+                            reference_tokenizer=ref_tokenizer,
+                            wbc_lambda=wbc_lambda,
+                            risk_explore_eps=risk_explore_eps,
+                            ppl_resample_threshold=ppl_resample_threshold,
+                            max_resamples=max_resamples,
+                            ppl_gate_window=ppl_gate_window,
+                            carlini_top_k=carlini_match_top_k,
                         )
                     elif strat == "memorization_sparse_infilling":
                         text = mod.generate_risk_aware(
@@ -740,6 +811,9 @@ def generate_samples_for_source(
             md["enabled"] = True
             md["strategies"] = [src]
             md["num_samples_per_strategy"] = n
+            md.setdefault("carlini_match_top_k", int(gcfg.get("top_k", 40)))
+            md.setdefault("decode_top_k", md["carlini_match_top_k"])
+            md.setdefault("carlini_top_p", float(gcfg.get("top_p", 1.0)))
             _append_memorization_detection_records(
                 records,
                 md_cfg=md,
@@ -1070,6 +1144,9 @@ def generate_diverse_samples(
         md_eff = dict(md)
         if not md_eff.get("num_samples_per_strategy"):
             md_eff["num_samples_per_strategy"] = n_per
+        md_eff.setdefault("carlini_match_top_k", int(gcfg.get("top_k", 40)))
+        md_eff.setdefault("decode_top_k", md_eff["carlini_match_top_k"])
+        md_eff.setdefault("carlini_top_p", float(gcfg.get("top_p", 1.0)))
         _carlini_log(
             "[generate] memorization_detection: generating extra samples (see YAML strategies) …",
             verbose=False,

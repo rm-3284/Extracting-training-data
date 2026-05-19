@@ -1,44 +1,42 @@
-# Merge on top of ``carlini_open_models.yaml`` to benchmark **cheap** decode-time defenses
-# alongside standard Carlini extraction (top_k, temperature_decay, internet variants, etc.)
-# so you can compare ``source`` slices in one ``samples.jsonl``.
+# Merge on top of ``carlini_open_models.yaml`` for decode-time defenses + Carlini baselines.
+# Defenses use ``decode_top_k`` / ``carlini_match_top_k`` aligned with attack ``top_k: 40``.
 #
-#   python -m mia_eval.run_decode_defense_pipeline \\
-#     --config mia_eval/config/carlini_open_models.yaml \\
-#     --merge-config mia_eval/config/carlini_overlay_decode_defenses.yaml \\
-#     --only pythia_12b_base --num-samples-per-strategy 32
-#
-# Set ``reference_model`` on each ``carlini_runs`` row (or under ``generation.memorization_detection``)
-# for ``memorization_contrastive`` and ``memorization_wbc_no_infilling``.
-
-# ``sparse_always_score_candidates: true`` restores the old per-token candidate infilling
-# (very slow). Defaults in this overlay keep sparse usable on a cluster.
+#   sbatch jobscript/run_carlini_decode_defenses_gpt_neo_per_method_array.slurm
 
 experiment:
   carlini_extract_subdir: carlini_extract_decode_defenses
 
 generation:
-  # Keep default from base YAML (true): do **not** turn off Carlini sampling here.
   carlini_sampling:
     enabled: true
+  num_samples_per_strategy: 500
   memorization_detection:
     enabled: true
-    decode_top_k: 5
+    carlini_match_top_k: 40
+    decode_top_k: 40
     num_samples_per_strategy: 500
     reference_model: null
-    # Prefix infilling recomputation cadence (also gates sparse **candidate** infilling by default).
     risk_every: 8
     fast_infilling_window: 32
+    sparse_infilling_top_n: 2
+    risk_explore_eps: 0.02
+    wbc_lambda: 0.6
+    cheap_logits_lambda: 0.5
+    cheap_logits_margin_threshold: 1.0
+    contrast_gate_gamma: 3.0
+    ppl_gate_threshold: 20.0
+    ppl_gate_window: 50
+    ppl_resample_threshold: 25.0
+    max_resamples: 2
     strategies:
+      - memorization_topk_control
       - memorization_baseline
       - memorization_cheap_logits
-      - memorization_sparse_infilling
       - memorization_contrastive
+      - memorization_ppl_gated_contrastive
+      - memorization_resample_contrastive
+      - memorization_sparse_infilling
       - memorization_wbc_no_infilling
-    cheap_logits_lambda: 0.35
-    cheap_logits_entropy_sharpness: 0.5
-    sparse_infilling_top_n: 3
-    contrast_gate_gamma: 2.0
     lambda_penalty_fast: 0.3
-    wbc_lambda: 0.5
     wbc_infilling_lambda: 0.3
     wbc_gate_every: 4

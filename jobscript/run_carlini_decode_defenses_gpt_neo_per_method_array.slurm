@@ -12,10 +12,10 @@
 #SBATCH --error=logs/%A_%a/carlini_def_gen_gptneo_err.log
 #SBATCH --partition=all
 #SBATCH --chdir=/n/fs/vision-mix/rm4411/Extracting-training-data
-#SBATCH --array=0-7
+#SBATCH --array=0-8
 #
 # One array task = one generation method, **500 samples** each (equal N per method).
-# Matches ``carlini_overlay_decode_defenses.yaml`` + base Carlini sampling (top_k, internet, temp decay).
+# Matches ``carlini_overlay_decode_defenses.yaml`` (decode_top_k / carlini_match_top_k = 40).
 #
 # Outputs per task:
 #   mia_eval_outputs/carlini_extract_decode_defenses/gpt_neo_2p7/by_method/<strategy>/samples.jsonl
@@ -24,12 +24,7 @@
 # Submit:
 #   sbatch jobscript/run_carlini_decode_defenses_gpt_neo_per_method_array.slurm
 #
-# Optional env:
-#   NUM_SAMPLES_PER_STRATEGY  (default 500)
-#   BATCH_SIZE  RUN_KEY  CARLINI_CONFIG  CARLINI_MERGE_DECODE_DEFENSES
-#   SKIP_EXISTING=1  CONDA_ENV  HF_HOME
-#
-# Task 6 (memorization_sparse_infilling) is slow; raise --time for that index if needed.
+# Task 7 (memorization_sparse_infilling) is slow; consider --time=48:00:00 for that index.
 #
 # Edit #SBATCH --array=0-N to match STRATEGIES length.
 
@@ -53,14 +48,15 @@ export HF_HOME="${HF_HOME:-/n/fs/vision-mix/rm4411/huggingface}"
 export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-$HF_HOME}"
 export TORCH_HOME="${TORCH_HOME:-/n/fs/vision-mix/rm4411/torch}"
 
-# Order must match #SBATCH --array=0-7
+# Order must match #SBATCH --array=0-8
 STRATEGIES=(
   top_k
-  top_k_internet
-  temperature_decay
+  memorization_topk_control
   memorization_baseline
   memorization_cheap_logits
   memorization_contrastive
+  memorization_ppl_gated_contrastive
+  memorization_resample_contrastive
   memorization_sparse_infilling
   memorization_wbc_no_infilling
 )

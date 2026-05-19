@@ -19,12 +19,15 @@ CARLINI_EXTRACTION_SOURCES: tuple[str, ...] = (
 # ``memorization_detection/memorization_detection.py`` decoders (decode-time MI-style steering).
 MEMORIZATION_DETECTION_SOURCES: tuple[str, ...] = (
     "memorization_baseline",
+    "memorization_topk_control",
     "memorization_risk_fast",
     "memorization_risk_slow",
     "memorization_wbc",
     "memorization_wbc_no_infilling",
     "memorization_cheap_logits",
     "memorization_contrastive",
+    "memorization_ppl_gated_contrastive",
+    "memorization_resample_contrastive",
     "memorization_sparse_infilling",
 )
 
