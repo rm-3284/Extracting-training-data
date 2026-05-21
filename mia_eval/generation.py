@@ -4,11 +4,12 @@ and optional ``memorization_detection`` decoders (baseline / risk-aware / WBC)."
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import json
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 try:
     from tqdm.auto import tqdm
@@ -419,6 +420,73 @@ def _import_memorization_detection():
     return mod
 
 
+def _fn_param_names(fn: Callable[..., Any]) -> set[str]:
+    return set(inspect.signature(fn).parameters.keys())
+
+
+def _invoke_fn(fn: Callable[..., Any], kwargs: Dict[str, Any]) -> Any:
+    """Call ``fn`` with only keyword arguments its signature accepts."""
+    params = inspect.signature(fn).parameters
+    if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()):
+        return fn(**kwargs)
+    allowed = set(params.keys())
+    return fn(**{k: v for k, v in kwargs.items() if k in allowed})
+
+
+def _call_generate_risk_aware(
+    mod: Any,
+    prompt: str,
+    model: Any,
+    tokenizer: Any,
+    **kwargs: Any,
+) -> str:
+    """
+    Invoke ``mod.generate_risk_aware`` (or resample helper) with kwargs compatible with the
+    checked-out ``memorization_detection`` build on the cluster.
+    """
+    mode = kwargs.get("mode")
+    risk_params = _fn_param_names(mod.generate_risk_aware)
+
+    if mode == "resample_contrastive" and "ppl_resample_threshold" not in risk_params:
+        resample_fn = getattr(mod, "generate_risk_aware_resample", None)
+        if resample_fn is not None:
+            resample_kw = {
+                "prompt": prompt,
+                "model": model,
+                "tokenizer": tokenizer,
+                "max_new_tokens": kwargs.get("max_new_tokens"),
+                "top_k": kwargs.get("top_k"),
+                "temperature": kwargs.get("temperature", 1.0),
+                "reference_model": kwargs.get("reference_model"),
+                "reference_tokenizer": kwargs.get("reference_tokenizer"),
+                "lambda_contrast": kwargs.get("wbc_lambda"),
+                "risk_explore_eps": kwargs.get("risk_explore_eps"),
+                "ppl_resample_threshold": kwargs.get("ppl_resample_threshold"),
+                "max_resamples": kwargs.get("max_resamples"),
+                "ppl_gate_window": kwargs.get("ppl_gate_window"),
+            }
+            return _invoke_fn(resample_fn, resample_kw)
+        _carlini_log(
+            "[generate] memorization_detection lacks resample_contrastive; "
+            "falling back to mode='contrastive'",
+            verbose=False,
+        )
+        kwargs = dict(kwargs)
+        kwargs["mode"] = "contrastive"
+
+    if mode == "ppl_gated_contrastive" and "ppl_gate_threshold" not in risk_params:
+        _carlini_log(
+            "[generate] memorization_detection lacks ppl_gated_contrastive; "
+            "falling back to mode='contrastive'",
+            verbose=False,
+        )
+        kwargs = dict(kwargs)
+        kwargs["mode"] = "contrastive"
+
+    call_kw = {"prompt": prompt, "model": model, "tokenizer": tokenizer, **kwargs}
+    return _invoke_fn(mod.generate_risk_aware, call_kw)
+
+
 def _eos_like_prompt_and_max_new(tokenizer, seq_len: int) -> Tuple[str, int]:
     """Match Carlini empty-prompt style: EOS (or pad) only, then fill up to ``seq_len`` tokens total."""
     p = tokenizer.eos_token or tokenizer.pad_token or ""
@@ -426,6 +494,35 @@ def _eos_like_prompt_and_max_new(tokenizer, seq_len: int) -> Tuple[str, int]:
     plen = int(enc["input_ids"].shape[1])
     # ``generate_*`` APIs extend by max_new_tokens; total length ≈ plen + max_new.
     return p, max(8, int(seq_len) - plen)
+
+
+def _generate_topk_control_one(
+    model,
+    tokenizer,
+    device: torch.device,
+    seq_len: int,
+    *,
+    top_k: int,
+    top_p: float = 1.0,
+    temperature: float = 1.0,
+) -> str:
+    """
+    Fair top-k control: same batched Carlini path as ``source=top_k`` (``_generate_batch``),
+    without importing ``generate_carlini_topk_control`` from memorization_detection.
+    """
+    texts = _generate_batch(
+        model,
+        tokenizer,
+        device,
+        1,
+        seq_len,
+        top_k=top_k,
+        top_p=top_p,
+        do_sample=True,
+        logits_processors=None,
+        temperature=temperature,
+    )
+    return texts[0]
 
 
 def _append_memorization_detection_records(
@@ -540,17 +637,18 @@ def _append_memorization_detection_records(
                             temperature=temperature,
                         )
                     elif strat == "memorization_topk_control":
-                        text = mod.generate_carlini_topk_control(
-                            prompt,
+                        text = _generate_topk_control_one(
                             model,
                             tokenizer,
-                            max_new_tokens=max_new,
-                            temperature=temperature,
+                            device,
+                            seq_len,
                             top_k=carlini_match_top_k,
                             top_p=carlini_top_p,
+                            temperature=temperature,
                         )
                     elif strat == "memorization_risk_fast":
-                        text = mod.generate_risk_aware(
+                        text = _call_generate_risk_aware(
+                            mod,
                             prompt,
                             model,
                             tokenizer,
@@ -565,7 +663,8 @@ def _append_memorization_detection_records(
                             reference_tokenizer=None,
                         )
                     elif strat == "memorization_risk_slow":
-                        text = mod.generate_risk_aware(
+                        text = _call_generate_risk_aware(
+                            mod,
                             prompt,
                             model,
                             tokenizer,
@@ -581,7 +680,8 @@ def _append_memorization_detection_records(
                         )
                     elif strat == "memorization_wbc":
                         assert ref_model is not None
-                        text = mod.generate_risk_aware(
+                        text = _call_generate_risk_aware(
+                            mod,
                             prompt,
                             model,
                             tokenizer,
@@ -607,7 +707,8 @@ def _append_memorization_detection_records(
                         )
                     elif strat == "memorization_wbc_no_infilling":
                         assert ref_model is not None
-                        text = mod.generate_risk_aware(
+                        text = _call_generate_risk_aware(
+                            mod,
                             prompt,
                             model,
                             tokenizer,
@@ -632,7 +733,8 @@ def _append_memorization_detection_records(
                             wbc_disable_infilling=True,
                         )
                     elif strat == "memorization_cheap_logits":
-                        text = mod.generate_risk_aware(
+                        text = _call_generate_risk_aware(
+                            mod,
                             prompt,
                             model,
                             tokenizer,
@@ -651,7 +753,8 @@ def _append_memorization_detection_records(
                         )
                     elif strat == "memorization_contrastive":
                         assert ref_model is not None
-                        text = mod.generate_risk_aware(
+                        text = _call_generate_risk_aware(
+                            mod,
                             prompt,
                             model,
                             tokenizer,
@@ -672,7 +775,8 @@ def _append_memorization_detection_records(
                         )
                     elif strat == "memorization_ppl_gated_contrastive":
                         assert ref_model is not None
-                        text = mod.generate_risk_aware(
+                        text = _call_generate_risk_aware(
+                            mod,
                             prompt,
                             model,
                             tokenizer,
@@ -696,7 +800,8 @@ def _append_memorization_detection_records(
                         )
                     elif strat == "memorization_resample_contrastive":
                         assert ref_model is not None
-                        text = mod.generate_risk_aware(
+                        text = _call_generate_risk_aware(
+                            mod,
                             prompt,
                             model,
                             tokenizer,
@@ -714,7 +819,8 @@ def _append_memorization_detection_records(
                             carlini_top_k=carlini_match_top_k,
                         )
                     elif strat == "memorization_sparse_infilling":
-                        text = mod.generate_risk_aware(
+                        text = _call_generate_risk_aware(
+                            mod,
                             prompt,
                             model,
                             tokenizer,
@@ -806,7 +912,23 @@ def generate_samples_for_source(
     records: List[Dict[str, Any]] = []
 
     try:
-        if src in MEMORIZATION_DETECTION_SOURCES:
+        if src == "memorization_topk_control":
+            records.extend(
+                _run_strategy(
+                    model,
+                    tokenizer,
+                    device,
+                    n,
+                    bs,
+                    seq_len,
+                    source=src,
+                    top_k=top_k,
+                    top_p=top_p,
+                    logits_processors=None,
+                    temperature=1.0,
+                )
+            )
+        elif src in MEMORIZATION_DETECTION_SOURCES:
             md = dict(gcfg.get("memorization_detection") or {})
             md["enabled"] = True
             md["strategies"] = [src]
